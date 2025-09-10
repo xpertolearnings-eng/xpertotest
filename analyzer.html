@@ -67,6 +67,36 @@
 
     <script type="text/babel">
         // --- GEMINI API CALL HELPERS ---
+
+        // **FIX**: Re-introduced a robust response parser.
+        // This function attempts to parse the AI's response as JSON. If it fails,
+        // it assumes the JSON is wrapped in other text (like markdown) and extracts
+        // the core JSON object before trying to parse again.
+        const parseGeminiResponse = (text) => {
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                console.warn("Initial JSON.parse failed. Attempting to repair.", e);
+            }
+
+            let repairedText = text.trim();
+            const firstBracket = repairedText.indexOf('{');
+            const lastBracket = repairedText.lastIndexOf('}');
+
+            if (firstBracket === -1 || lastBracket === -1 || lastBracket < firstBracket) {
+                throw new Error("Could not find a valid JSON object in the AI's response.");
+            }
+
+            repairedText = repairedText.substring(firstBracket, lastBracket + 1);
+
+            try {
+                return JSON.parse(repairedText);
+            } catch (e) {
+                 console.error("Failed to parse JSON even after repairing.", e);
+                 console.error("Problematic string:", repairedText);
+                 throw new Error("The AI's response could not be repaired into valid JSON.");
+            }
+        };
         
         // This is the generic function to call our Netlify serverless function.
         const callGeminiAPI = async (systemPrompt) => {
@@ -78,13 +108,19 @@
                     body: JSON.stringify({ prompt: systemPrompt }),
                 });
 
+                // **FIX**: Get the raw text from the response first. This allows our
+                // custom parser to attempt repairs if the response is not perfect JSON.
+                const responseText = await response.text();
+
                 if (!response.ok) {
-                    const errorBody = await response.json();
-                    throw new Error(`Network response was not ok: ${response.status}. ${errorBody.details || 'Server error'}`);
+                    let errorDetails = responseText;
+                    try { errorDetails = JSON.parse(responseText).details || responseText; } 
+                    catch (e) { /* Ignore if error response is not JSON */ }
+                    throw new Error(`Network response was not ok: ${response.status}. ${errorDetails}`);
                 }
                 
-                // The backend now guarantees a valid JSON response.
-                const report = await response.json();
+                // Use the robust parsing function instead of the browser's default.
+                const report = parseGeminiResponse(responseText);
                 console.log("Received and parsed detailed report from Netlify function:", report);
                 return report;
             } catch (error) {
@@ -97,15 +133,15 @@
         const callResumeGeminiAPI = (resumeText) => {
             console.log("Calling Netlify Function for RESUME analysis with hyper-personalized prompt...");
             
-            // **FIX**: Sanitize the input resume text to prevent characters that could break JSON generation.
-            // This escapes backslashes, double quotes, and replaces various newline characters
-            // with a literal '\\n' which is what the prompt asks the AI to produce in its own output.
+            // **FIX**: More robustly sanitize the input resume text to prevent characters that could break JSON generation.
+            // This handles smart quotes, invisible characters, and standardizes newlines before escaping.
             const sanitizedResumeText = resumeText
+                .replace(/’/g, "'") // Replace smart single quotes
+                .replace(/“|”/g, '"') // Replace smart double quotes
+                .replace(/[\u200B-\u200D\uFEFF]/g, '') // Remove zero-width spaces
                 .replace(/\\/g, '\\\\')  // Escape backslashes
                 .replace(/"/g, '\\"')   // Escape double quotes
-                .replace(/\r\n/g, '\\n') // Windows newlines
-                .replace(/\r/g, '\\n')   // Mac newlines
-                .replace(/\n/g, '\\n');  // Linux newlines
+                .replace(/\r\n|\r|\n/g, '\\n'); // Consolidate and escape newlines
 
             const systemPrompt = `
             You are 'Xperto AI', a world-class resume analyzer. Your output MUST be a single, valid JSON object with no extra text or markdown.
