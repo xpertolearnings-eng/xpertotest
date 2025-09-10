@@ -150,6 +150,20 @@
                   "hint": "<string - e.g., 'Adding numbers shows your impact.'>",
                   "score": "<number - e.g., 9>",
                   "sectionId": "<string - e.g., 'experience'>"
+                },
+                {
+                  "id": "<string - e.g., 'fix2'>",
+                  "title": "<string - e.g., 'Add a Professional Summary'>",
+                  "hint": "<string - e.g., 'Summarize your key skills and career goals upfront.'>",
+                  "score": "<number - e.g., 8>",
+                  "sectionId": "<string - e.g., 'summary'>"
+                },
+                {
+                  "id": "<string - e.g., 'fix3'>",
+                  "title": "<string - e.g., 'Tailor Skills to Job Descriptions'>",
+                  "hint": "<string - e.g., 'Match keywords from target roles.'>",
+                  "score": "<number - e.g., 7>",
+                  "sectionId": "<string - e.g., 'skills'>"
                 }
               ],
               "sections": [
@@ -163,6 +177,66 @@
                     "detailedTips": ["<string - In-depth advice, e.g., 'Incorporate 2-3 key skills from your target role directly into your summary to immediately catch a recruiter's eye.'>"],
                     "examples": [{ "before": "<string - Snippet from user's resume>", "after": "<string - A rewritten, improved version>" }],
                     "explanation": "<string - Why the 'after' version is better for ATS and recruiters.>"
+                  }
+                },
+                {
+                  "id": "experience",
+                  "title": "Work Experience",
+                  "score": "<number - 0-100 score>",
+                  "freeFindings": ["<string - e.g., 'Used action verbs like "Managed" and "Developed".'>"],
+                  "quickTips": ["<string - e.g., 'Start each bullet point with a strong action verb.'>"],
+                  "lockedContent": {
+                    "detailedTips": ["<string - e.g., 'Focus on the STAR method (Situation, Task, Action, Result) to frame your accomplishments. Quantify results with metrics like percentages, revenue figures, or time saved.'>"],
+                    "examples": [{ "before": "<string - e.g., 'Responsible for managing social media accounts.'>", "after": "<string - e.g., 'Grew social media engagement by 35% over 6 months by implementing a data-driven content strategy across Instagram and Twitter.'>" }],
+                    "explanation": "<string - e.g., 'The "after" example uses a specific metric (35%) and action-oriented language, making the achievement much more concrete and impressive.'>"
+                  }
+                },
+                {
+                  "id": "skills",
+                  "title": "Skills",
+                  "score": "<number - 0-100 score>",
+                  "freeFindings": ["<string - e.g., 'A good mix of technical and soft skills is listed.'>"],
+                  "quickTips": ["<string - e.g., 'Separate skills into categories like "Programming Languages", "Tools", and "Certifications".'>"],
+                  "lockedContent": {
+                    "detailedTips": ["<string - e.g., 'Ensure your skills section mirrors the keywords found in job descriptions for your target roles. ATS often screen for these exact keywords.'>"],
+                    "examples": [{ "before": "<string - e.g., 'Skills: Python, Leadership, JavaScript'>", "after": "<string - e.g., 'Technical Skills: Python (Pandas, NumPy), JavaScript (React, Node.js), SQL, AWS (S3, EC2)\\nSoft Skills: Project Management, Team Leadership, Agile Methodologies'>" }],
+                    "explanation": "<string - Categorization and adding specific libraries/frameworks makes your proficiency clearer and is better for keyword matching.'>"
+                  }
+                },
+                {
+                  "id": "projects",
+                  "title": "Projects",
+                  "score": "<number - 0-100 score>",
+                  "freeFindings": ["<string - e.g., 'Project descriptions are clear.'>"],
+                  "quickTips": ["<string - e.g., 'Include a link to the live project or GitHub repository.'>"],
+                  "lockedContent": {
+                    "detailedTips": ["<string - e.g., 'For each project, briefly describe the problem you solved, the tech stack you used, and your specific contribution.'>"],
+                    "examples": [{ "before": "<string - e.g., 'Made a website.'>", "after": "<string - e.g., 'Portfolio Website: Developed a responsive personal portfolio using React and Tailwind CSS, deployed on Vercel. Implemented a contact form with Netlify Forms.'>" }],
+                    "explanation": "<string - The improved version clearly states the purpose, technologies, and features, demonstrating practical skills.'>"
+                  }
+                },
+                {
+                  "id": "education",
+                  "title": "Education",
+                  "score": "<number - 0-100 score>",
+                  "freeFindings": ["<string - e.g., 'Education section is formatted correctly.'>"],
+                  "quickTips": ["<string - e.g., 'Include your expected graduation date if you are still a student.'>"],
+                  "lockedContent": {
+                    "detailedTips": ["<string - e.g., 'If your GPA is above 3.5 (or equivalent), include it. You can also list relevant coursework to showcase specialized knowledge.'>"],
+                    "examples": [{ "before": "<string - e.g., 'B.Tech, Computer Science'>", "after": "<string - e.g., 'Bachelor of Technology in Computer Science, XYZ University (Expected May 2025)\\nCGPA: 8.5/10\\nRelevant Coursework: Data Structures & Algorithms, Database Management Systems, Operating Systems.'>" }],
+                    "explanation": "<string - Adding GPA, graduation date, and relevant courses provides recruiters with more context about your academic performance and knowledge base.'>"
+                  }
+                },
+                {
+                  "id": "other",
+                  "title": "Achievements/Other",
+                  "score": "<number - 0-100 score>",
+                  "freeFindings": ["<string - e.g., 'Includes certifications.'>"],
+                  "quickTips": ["<string - e.g., 'Create a separate section for "Certifications" or "Awards" if you have several.'>"],
+                  "lockedContent": {
+                    "detailedTips": ["<string - e.g., 'Quantify achievements from hackathons or competitions (e.g., "1st place out of 50 teams"). Mention leadership roles in clubs or organizations.'>"],
+                    "examples": [{ "before": "<string - e.g., 'Won a hackathon.'>", "after": "<string - e.g., 'Winner, Smart India Hackathon 2023: Led a team of 4 to develop a prize-winning solution for a healthcare challenge statement, placing 1st among 100+ competing teams.'>" }],
+                    "explanation": "<string - Specificity about the event, your role, and the scale of your achievement makes it far more impactful.'>"
                   }
                 }
               ]
@@ -191,7 +265,7 @@
             5.  **Strict JSON Output:** The entire response must be a single, valid JSON object adhering to the schema below. No extra text or explanations.
 
             **JSON Schema to Follow:**
-             {
+            {
               "overallScore": "<number - Average score of all sections>",
               "overallSummary": "<string - A 2-sentence summary of the profile's key strengths and primary area for improvement.>",
               "topFixes": [
@@ -201,6 +275,20 @@
                   "hint": "<string - e.g., 'Your headline is crucial for recruiter searches.'>",
                   "score": "<number - e.g., 10>",
                   "sectionId": "<string - e.g., 'headline'>"
+                },
+                {
+                  "id": "<string - e.g., 'fix_about'>",
+                  "title": "<string - e.g., 'Craft a Compelling "About" Section'>",
+                  "hint": "<string - e.g., 'Tell your professional story to engage readers.'>",
+                  "score": "<number - e.g., 8>",
+                  "sectionId": "<string - e.g., 'about'>"
+                },
+                {
+                  "id": "<string - e.g., 'fix_experience'>",
+                  "title": "<string - e.g., 'Detail Your Experience with Metrics'>",
+                  "hint": "<string - e.g., 'Show your impact, don't just list duties.'>",
+                  "score": "<number - e.g., 9>",
+                  "sectionId": "<string - e.g., 'experience'>"
                 }
               ],
               "sections": [
@@ -214,6 +302,54 @@
                     "detailedTips": ["<string - A professional photo should be high-resolution, with a plain background, where you are looking at the camera and smiling. A custom banner is much better than the default.'>"],
                     "examples": [{ "before": "<string - A description of a weak photo/banner, e.g., 'Using a distant group photo and default blue banner.'>", "after": "<string - A description of a strong photo/banner, e.g., 'Clear, friendly headshot with a custom banner that includes keywords like "Software Development | React | Cloud Computing".'>" }],
                     "explanation": "<string - First impressions matter. A professional photo and custom banner make your profile look complete and serious.'>"
+                  }
+                },
+                {
+                  "id": "headline",
+                  "title": "Headline",
+                  "score": "<number - 0-100 score>",
+                  "freeFindings": ["<string - e.g., 'Headline clearly states current role.'>"],
+                  "quickTips": ["<string - e.g., 'Add keywords related to your target roles.'>"],
+                  "lockedContent": {
+                    "detailedTips": ["<string - Your headline is prime real estate for keywords. Go beyond just your job title. Include key skills, technologies, and what you're passionate about. Use the pipe character '|' to separate ideas.'>"],
+                    "examples": [{ "before": "<string - e.g., 'Student at XYZ University'>", "after": "<string - e.g., 'Aspiring Software Engineer | React, Node.js, and Python Developer | Seeking Internships in Web Development'>" }],
+                    "explanation": "<string - The 'after' headline is rich with keywords recruiters search for, making the profile much more discoverable.'>"
+                  }
+                },
+                {
+                  "id": "about",
+                  "title": "About Section",
+                  "score": "<number - 0-100 score>",
+                  "freeFindings": ["<string - e.g., 'About section provides a good overview.'>"],
+                  "quickTips": ["<string - e.g., 'End with a clear call to action, like inviting people to connect.'>"],
+                  "lockedContent": {
+                    "detailedTips": ["<string - Structure your 'About' section in 3 paragraphs: 1) Who you are and what you're excited about. 2) Your key skills and 1-2 top achievements. 3) What you're looking for and how to contact you. Sprinkle in relevant keywords.'>"],
+                    "examples": [{ "before": "<string - e.g., 'I am a student studying computer science.'>", "after": "<string - e.g., 'Passionate final-year Computer Science student with a strong foundation in full-stack web development... [continues with more detail]... Open to connecting about software engineering internship opportunities.'>" }],
+                    "explanation": "<string - A structured 'About' section tells your professional story, showcases your skills, and makes it easy for recruiters to understand your goals.'>"
+                  }
+                },
+                {
+                  "id": "experience",
+                  "title": "Experience Section",
+                  "score": "<number - 0-100 score>",
+                  "freeFindings": ["<string - e.g., 'Experience descriptions are present.'>"],
+                  "quickTips": ["<string - e.g., 'Use 2-3 bullet points for each role.'>"],
+                  "lockedContent": {
+                    "detailedTips": ["<string - Just like a resume, use action verbs and quantify your achievements with metrics for each role or project listed. This demonstrates impact, not just responsibility.'>"],
+                    "examples": [{ "before": "<string - e.g., 'Wrote code for the company website.'>", "after": "<string - e.g., '- Refactored the checkout process component in React, reducing bug reports by 15% and improving user session duration.\\n- Collaborated with a team of 3 to deploy a new feature using CI/CD pipelines.'>" }],
+                    "explanation": "<string - Specific, quantified bullet points are far more persuasive and give a clear picture of your capabilities.'>"
+                  }
+                },
+                {
+                  "id": "skills",
+                  "title": "Skills & Endorsements",
+                  "score": "<number - 0-100 score>",
+                  "freeFindings": ["<string - e.g., 'Has more than 10 skills listed.'>"],
+                  "quickTips": ["<string - e.g., 'Pin your top 3 most relevant skills to the top of the list.'>"],
+                  "lockedContent": {
+                    "detailedTips": ["<string - Aim for at least 15-20 relevant skills. The more skills you have that match a job description, the higher you may rank in recruiter searches. Actively seek endorsements from colleagues and professors for your top skills.'>"],
+                    "examples": [{ "before": "<string - e.g., 'Only having 5 skills listed with no endorsements.'>", "after": "<string - e.g., 'Having 20+ skills, with the top 3 (e.g., "React.js", "Node.js", "Python") pinned and endorsed by multiple connections.'>" }],
+                    "explanation": "<string - A robust skills section with endorsements provides social proof of your abilities and significantly boosts your profile's visibility in searches.'>"
                   }
                 }
               ]
@@ -251,19 +387,19 @@
         const Header = () => {
             const [isMenuOpen, setIsMenuOpen] = React.useState(false);
             const navItems = [
-                { id: 'home', label: 'Home', href: '/index' },
+                { id: 'home', label: 'Home', href: '/' },
                 { id: 'courses', label: 'Courses', href: '/courses' },
                 { id: 'analyzer', label: 'AI Analyzer', href: '/analyzer' },
                 { id: 'freelance', label: 'Find Internships', href: '/internships' },
             ];
             
-            const currentPage = window.location.pathname.split('/').pop().split('.')[0] || 'index';
+            const currentPage = window.location.pathname.split('/').pop() || 'index';
             const activePageId = currentPage === 'index' ? 'home' : currentPage;
 
             return (
                 <header className="bg-black/50 backdrop-blur-md sticky top-0 z-40 border-b border-gray-800">
                     <nav className="container mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
-                        <a href="/index" className="flex items-center cursor-pointer">
+                        <a href="/" className="flex items-center cursor-pointer">
                             <Logo />
                         </a>
                         <div className="hidden md:flex items-center space-x-8">
@@ -893,4 +1029,5 @@
     </script>
 </body>
 </html>
+
 
