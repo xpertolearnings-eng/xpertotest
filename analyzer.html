@@ -68,10 +68,7 @@
     <script type="text/babel">
         // --- GEMINI API CALL HELPERS ---
 
-        // **FIX**: Re-introduced a robust response parser.
-        // This function attempts to parse the AI's response as JSON. If it fails,
-        // it assumes the JSON is wrapped in other text (like markdown) and extracts
-        // the core JSON object before trying to parse again.
+        // This function attempts to parse the AI's response as JSON.
         const parseGeminiResponse = (text) => {
             try {
                 return JSON.parse(text);
@@ -90,7 +87,11 @@
             repairedText = repairedText.substring(firstBracket, lastBracket + 1);
 
             try {
-                return JSON.parse(repairedText);
+                // **FIX**: Add a more robust repair step. This regex finds and removes
+                // trailing commas in arrays and objects (e.g., [1, 2,]) which is a
+                // common AI error and the likely cause of the parsing failures.
+                const repairedJsonString = repairedText.replace(/,\s*([}\]])/g, "$1");
+                return JSON.parse(repairedJsonString);
             } catch (e) {
                  console.error("Failed to parse JSON even after repairing.", e);
                  console.error("Problematic string:", repairedText);
@@ -108,8 +109,6 @@
                     body: JSON.stringify({ prompt: systemPrompt }),
                 });
 
-                // **FIX**: Get the raw text from the response first. This allows our
-                // custom parser to attempt repairs if the response is not perfect JSON.
                 const responseText = await response.text();
 
                 if (!response.ok) {
@@ -119,7 +118,6 @@
                     throw new Error(`Network response was not ok: ${response.status}. ${errorDetails}`);
                 }
                 
-                // Use the robust parsing function instead of the browser's default.
                 const report = parseGeminiResponse(responseText);
                 console.log("Received and parsed detailed report from Netlify function:", report);
                 return report;
@@ -133,8 +131,6 @@
         const callResumeGeminiAPI = (resumeText) => {
             console.log("Calling Netlify Function for RESUME analysis with hyper-personalized prompt...");
             
-            // **FIX**: More robustly sanitize the input resume text to prevent characters that could break JSON generation.
-            // This handles smart quotes, invisible characters, and standardizes newlines before escaping.
             const sanitizedResumeText = resumeText
                 .replace(/’/g, "'") // Replace smart single quotes
                 .replace(/“|”/g, '"') // Replace smart double quotes
