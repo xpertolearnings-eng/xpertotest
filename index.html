@@ -175,10 +175,10 @@
         const Header = () => {
             const [isMenuOpen, setIsMenuOpen] = React.useState(false);
             const navItems = [
-                { id: 'home', label: 'Home', href: '/index.html' },
-                { id: 'courses', label: 'Courses', href: '/courses.html' },
-                { id: 'analyzer', label: 'AI Analyzer', href: '/analyzer.html' },
-                { id: 'freelance', label: 'Find Internships', href: '/internships.html' },
+                { id: 'home', label: 'Home', href: '/index' },
+                { id: 'courses', label: 'Courses', href: '/courses' },
+                { id: 'analyzer', label: 'AI Analyzer', href: '/analyzer' },
+                { id: 'freelance', label: 'Find Internships', href: '/internships' },
             ];
 
             // Determine current page from URL
@@ -188,7 +188,7 @@
             return (
                 <header className="bg-black/50 backdrop-blur-md sticky top-0 z-40 border-b border-gray-800">
                     <nav className="container mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
-                        <a href="/index.html" className="flex items-center cursor-pointer">
+                        <a href="/index" className="flex items-center cursor-pointer">
                             <Logo />
                         </a>
                         <div className="hidden md:flex items-center space-x-8">
@@ -240,9 +240,9 @@
                         <div>
                             <h3 className="font-semibold mb-4">Navigate</h3>
                             <ul className="space-y-2 text-gray-400 text-sm">
-                                <li><a href="/courses.html" className="hover:text-[#00C853]">Courses</a></li>
-                                <li><a href="/analyzer.html" className="hover:text-[#00C853]">AI Analyzer</a></li>
-                                <li><a href="/internships.html" className="hover:text-[#00C853]">Find Internships</a></li>
+                                <li><a href="/courses" className="hover:text-[#00C853]">Courses</a></li>
+                                <li><a href="/analyzer" className="hover:text-[#00C853]">AI Analyzer</a></li>
+                                <li><a href="/internships" className="hover:text-[#00C853]">Find Internships</a></li>
                             </ul>
                         </div>
                         <div>
@@ -312,10 +312,10 @@
                                 Xperto is the ultimate platform for students to learn in-demand skills, optimize their career tools, and connect with real-world opportunities.
                             </p>
                             <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-                                <a href="/courses.html" className="w-full sm:w-auto px-8 py-3 text-lg font-semibold text-black bg-[#00C853] rounded-lg shadow-sm hover:bg-green-400 transform hover:scale-105 transition-all duration-300 text-center">
+                                <a href="/courses" className="w-full sm:w-auto px-8 py-3 text-lg font-semibold text-black bg-[#00C853] rounded-lg shadow-sm hover:bg-green-400 transform hover:scale-105 transition-all duration-300 text-center">
                                     Explore Courses
                                 </a>
-                                <a href="/analyzer.html" className="w-full sm:w-auto px-8 py-3 text-lg font-semibold text-gray-200 bg-gray-800 border border-gray-700 rounded-lg shadow-sm hover:bg-gray-700 hover:border-gray-600 transform hover:scale-105 transition-all duration-300 text-center">
+                                <a href="/analyzer" className="w-full sm:w-auto px-8 py-3 text-lg font-semibold text-gray-200 bg-gray-800 border border-gray-700 rounded-lg shadow-sm hover:bg-gray-700 hover:border-gray-600 transform hover:scale-105 transition-all duration-300 text-center">
                                     Analyze My Profile
                                 </a>
                             </div>
@@ -349,7 +349,7 @@
                                         <li className="flex items-start"><CheckCircleIcon /><div><span className="font-semibold text-gray-200">Keyword Analysis:</span> <span className="text-gray-400">We identify and suggest keywords tailored to your target job roles.</span></div></li>
                                         <li className="flex items-start"><CheckCircleIcon /><div><span className="font-semibold text-gray-200">Impactful Metrics:</span> <span className="text-gray-400">Learn how to quantify your achievements to demonstrate your value.</span></div></li>
                                     </ul>
-                                    <a href="/analyzer.html" className="mt-8 inline-block px-8 py-3 text-lg font-semibold text-black bg-[#00C853] rounded-lg shadow-sm hover:bg-green-400 transition-all duration-300">
+                                    <a href="/analyzer" className="mt-8 inline-block px-8 py-3 text-lg font-semibold text-black bg-[#00C853] rounded-lg shadow-sm hover:bg-green-400 transition-all duration-300">
                                         Get Your Free Analysis
                                     </a>
                                 </div>
@@ -371,7 +371,7 @@
                                             <p className="text-gray-400 mt-2 text-sm">{course.description}</p>
                                         </div>
                                         <div className="p-6 border-t border-gray-800">
-                                            <a href="/courses.html" className="block text-center w-full py-2 font-semibold text-[#00C853] bg-green-500/10 rounded-lg hover:bg-green-500/20 transition-colors">
+                                            <a href="/courses" className="block text-center w-full py-2 font-semibold text-[#00C853] bg-green-500/10 rounded-lg hover:bg-green-500/20 transition-colors">
                                                 Learn More
                                             </a>
                                         </div>
@@ -480,3 +480,4 @@
     </script>
 </body>
 </html>
+
