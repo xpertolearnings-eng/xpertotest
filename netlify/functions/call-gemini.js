@@ -23,30 +23,35 @@ exports.handler = async function (event, context) {
       return { statusCode: 400, body: "Bad Request: Prompt is missing." };
     }
 
-    // Initialize the Generative Model.
-    // Use the latest gemini-1.5-flash model for better performance and stability.
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // **FIX**: Use the 'latest' version for potential speed improvements and add a generationConfig.
+    // Explicitly requesting JSON output makes the model faster and more reliable,
+    // which is crucial for avoiding serverless function timeouts.
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash-latest",
+      generationConfig: {
+        responseMimeType: "application/json",
+      },
+    });
 
     // Send the prompt to the Gemini API.
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
 
-    // Return the successful response from the AI.
+    // The model is now configured to return a raw JSON string.
+    // We can pass this directly to the frontend.
     return {
       statusCode: 200,
       headers: {
         "Content-Type": "application/json",
       },
-      body: text,
+      body: text, // The body is now a clean JSON string.
     };
   } catch (error) {
-    // **IMPROVED ERROR HANDLING**
     // Log the full, detailed error to the Netlify function logs for debugging.
     console.error("Detailed error calling Gemini API:", error);
 
     // Return a more specific error message to the frontend.
-    // This will help us see the exact problem in the browser's developer console.
     return {
       statusCode: 500,
       body: JSON.stringify({
@@ -56,4 +61,3 @@ exports.handler = async function (event, context) {
     };
   }
 };
-
