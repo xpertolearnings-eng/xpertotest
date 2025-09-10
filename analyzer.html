@@ -83,8 +83,7 @@
                     throw new Error(`Network response was not ok: ${response.status}. ${errorBody.details || 'Server error'}`);
                 }
                 
-                // **FIX**: The backend now guarantees a valid JSON response.
-                // We no longer need the complex parsing logic and can directly parse the JSON body.
+                // The backend now guarantees a valid JSON response.
                 const report = await response.json();
                 console.log("Received and parsed detailed report from Netlify function:", report);
                 return report;
@@ -97,8 +96,17 @@
         // This function creates the specific, hyper-personalized prompt for RESUME analysis.
         const callResumeGeminiAPI = (resumeText) => {
             console.log("Calling Netlify Function for RESUME analysis with hyper-personalized prompt...");
-            // The prompt remains the same, as it correctly instructs the AI on the desired structure.
-            // The backend now enforces that the output of this prompt is valid JSON.
+            
+            // **FIX**: Sanitize the input resume text to prevent characters that could break JSON generation.
+            // This escapes backslashes, double quotes, and replaces various newline characters
+            // with a literal '\\n' which is what the prompt asks the AI to produce in its own output.
+            const sanitizedResumeText = resumeText
+                .replace(/\\/g, '\\\\')  // Escape backslashes
+                .replace(/"/g, '\\"')   // Escape double quotes
+                .replace(/\r\n/g, '\\n') // Windows newlines
+                .replace(/\r/g, '\\n')   // Mac newlines
+                .replace(/\n/g, '\\n');  // Linux newlines
+
             const systemPrompt = `
             You are 'Xperto AI', a world-class resume analyzer. Your output MUST be a single, valid JSON object with no extra text or markdown.
 
@@ -133,7 +141,7 @@
 
             **Resume Text to Analyze:**
             ---
-            ${resumeText}
+            ${sanitizedResumeText}
             ---`;
             return callGeminiAPI(systemPrompt);
         };
@@ -777,3 +785,4 @@
     </script>
 </body>
 </html>
+
