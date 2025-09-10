@@ -1,13 +1,17 @@
 {
-  "name": "functions",
+  "name": "xperto-website",
   "version": "1.0.0",
-  "description": "",
-  "main": "call-gemini.js",
+  "description": "Edtech platform with AI analysis features.",
+  "main": "index.html",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
   "author": "",
   "license": "ISC",
-  "dependencies": {}
+  "dependencies": {
+    "@google/generative-ai": "^0.2.1"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.1"
+  }
 }
