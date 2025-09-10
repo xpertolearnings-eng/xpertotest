@@ -70,26 +70,42 @@
         // This function attempts to parse a JSON response, cleaning it if it's wrapped in markdown.
         const parseGeminiResponse = (responseText) => {
             try {
+                // First, try to parse it as-is, which is the ideal case.
                 return JSON.parse(responseText);
             } catch (e) {
-                console.warn("Response was not clean JSON, attempting to clean markdown...");
+                console.warn("Initial JSON parse failed, attempting to clean response...", e);
                 let jsonString = responseText.trim();
                 
+                // Remove markdown code block fences (```json ... ``` or ``` ... ```)
                 if (jsonString.startsWith('```json')) {
                     jsonString = jsonString.substring(7, jsonString.length - 3).trim();
                 } else if (jsonString.startsWith('```')) {
                     jsonString = jsonString.substring(3, jsonString.length - 3).trim();
                 }
 
+                // Find the first '{' and the last '}' to extract the core JSON object.
+                // This helps remove any extraneous text the model might have added.
                 const startIndex = jsonString.indexOf('{');
                 const endIndex = jsonString.lastIndexOf('}');
                 
                 if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
-                     throw new Error("Could not find a valid JSON object in the server response.");
+                     throw new Error("Could not find a valid JSON object within the cleaned server response.");
                 }
                 
-                const finalJsonString = jsonString.substring(startIndex, endIndex + 1);
-                return JSON.parse(finalJsonString);
+                let finalJsonString = jsonString.substring(startIndex, endIndex + 1);
+                
+                // **FIX**: Before the final parse, attempt to fix common issues like unescaped newlines within strings.
+                // This is a fallback for when the model doesn't perfectly follow escaping rules.
+                finalJsonString = finalJsonString.replace(/\\n/g, "\\\\n"); // First, escape existing escaped newlines
+                finalJsonString = finalJsonString.replace(/\n/g, "\\n"); // Then, replace raw newlines
+                
+                try {
+                    return JSON.parse(finalJsonString);
+                } catch (finalError) {
+                    console.error("Final JSON parse attempt failed after cleaning:", finalError);
+                    console.error("Problematic string:", finalJsonString);
+                    throw new Error("Failed to parse JSON response even after cleaning and fixing common errors.");
+                }
             }
         };
         
@@ -122,40 +138,34 @@
         const callResumeGeminiAPI = (resumeText) => {
             console.log("Calling Netlify Function for RESUME analysis with hyper-personalized prompt...");
             const systemPrompt = `
-            You are 'Xperto AI', a world-class, ATS-focused resume analyzer. Your analysis must be hyper-personalized, deeply insightful, and directly quote the provided resume text. Your goal is to generate a structured, actionable report in a strict JSON format, following a freemium model.
+            You are 'Xperto AI', a world-class resume analyzer. Your output MUST be a single, valid JSON object with no extra text or markdown.
 
             **Core Directives:**
-            1.  **Hyper-Personalization & Depth:** You MUST find specific weak sentences/bullet points and use them as direct quotes. The analysis must go beyond surface-level advice. Explain the 'why' behind each suggestion, including its impact on ATS and the psychological impression on recruiters.
+            1.  **Hyper-Personalization & Depth:** Find 5 specific weak sentences/points in the resume and use them as direct quotes for the "before" field. Explain the 'why' behind each suggestion (ATS impact, recruiter psychology).
             2.  **Freemium Structure:**
-                * **Top 5 Fixes (Unlocked):** This is the free content. It MUST contain the five most critical, high-impact improvements. Each fix must be self-contained with a clear problem statement and a concrete 'before'/'after' solution using the user's own words.
-                * **Detailed Report (Locked):** This is the comprehensive, 5-section analysis. It must provide expert-level insights, multiple examples, and strategic advice.
-            3.  **Strictly Content-Specific:** Do not invent information. If a section is missing, the score must be low, and the feedback must state it's missing.
-            4.  **Realistic Scoring:** Scores (0-100) must be based on content quality (action verbs, quantifiable results, relevance). The 'overallScore' is the average of the 5 section scores.
-            5.  **Strict JSON Output:** The entire response must be a single, valid JSON object.
+                * **Top 5 Fixes (Unlocked):** Generate the 5 most critical improvements. Each must have a clear problem, a detailed solution, and a concrete 'before'/'after' example.
+                * **Detailed Report (Locked):** Generate a 5-section analysis with expert-level insights and multiple examples.
+            3.  **Content-Specific:** If a section (e.g., Projects) is missing, its score MUST be low and it should be mentioned.
+            4.  **Realistic Scoring:** Scores (0-100) are based on content quality (action verbs, quantifiable results). 'overallScore' is the average of the 5 section scores.
+            5.  **CRITICAL OUTPUT FORMAT:** The entire response must be a single, valid JSON object. All string values inside the JSON must be properly escaped. Newlines must be represented as '\\n'.
 
             **JSON Schema to Follow:**
             {
-              "overallScore": "<number - Average score of the 5 main sections>",
-              "overallSummary": "<string - A 2-sentence summary of the resume's key strength and primary area for improvement.>",
+              "overallScore": "<number>",
+              "overallSummary": "<string>",
               "topFixes": [
                 {
-                  "id": "<string - e.g., 'fix1'>",
-                  "title": "<string - The specific problem, e.g., 'Quantify Achievements in Experience'>",
-                  "problem": "<string - A one-sentence explanation of why this is a problem, e.g., 'Your experience bullet points describe duties but don't show the impact you made.'>",
-                  "solution": {
-                    "explanation": "<string - A detailed explanation of the fix, covering ATS impact and the psychological impression on a recruiter. Explain *why* the 'after' version is better.>",
-                    "before": "<string - The EXACT problematic quote from the user's resume.>",
-                    "after": "<string - The rewritten, improved version with strong verbs and metrics.>"
-                  },
-                  "sectionId": "<string - The ID of the related section, e.g., 'experience'>"
+                  "id": "<string>", "title": "<string>", "problem": "<string>",
+                  "solution": { "explanation": "<string>", "before": "<string>", "after": "<string>" },
+                  "sectionId": "<string>"
                 }
               ],
               "sections": [
-                { "id": "summary", "title": "Professional Summary", "score": "<number - 0-100>", "freeFindings": ["..."], "quickTips": ["..."], "lockedContent": { "detailedTips": ["..."], "examples": [{ "before": "...", "after": "..." }], "explanation": "..." }},
-                { "id": "experience", "title": "Work Experience", "score": "<number - 0-100>", "freeFindings": ["..."], "quickTips": ["..."], "lockedContent": { "detailedTips": ["..."], "examples": [{ "before": "...", "after": "..." }], "explanation": "..." }},
-                { "id": "projects", "title": "Projects", "score": "<number - 0-100>", "freeFindings": ["..."], "quickTips": ["..."], "lockedContent": { "detailedTips": ["..."], "examples": [{ "before": "...", "after": "..." }], "explanation": "..." }},
-                { "id": "skills", "title": "Skills Section", "score": "<number - 0-100>", "freeFindings": ["..."], "quickTips": ["..."], "lockedContent": { "detailedTips": ["..."], "examples": [{ "before": "...", "after": "..." }], "explanation": "..." }},
-                { "id": "education", "title": "Education", "score": "<number - 0-100>", "freeFindings": ["..."], "quickTips": ["..."], "lockedContent": { "detailedTips": ["..."], "examples": [{ "before": "...", "after": "..." }], "explanation": "..." }}
+                { "id": "summary", "title": "Professional Summary", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }},
+                { "id": "experience", "title": "Work Experience", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }},
+                { "id": "projects", "title": "Projects", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }},
+                { "id": "skills", "title": "Skills Section", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }},
+                { "id": "education", "title": "Education", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }}
               ]
             }
 
@@ -170,39 +180,33 @@
         const callLinkedInUrlGeminiAPI = (profileUrl) => {
             console.log("Calling Netlify Function for LINKEDIN URL analysis...");
             const systemPrompt = `
-            You are 'Xperto AI', a world-class LinkedIn profile optimizer. Your analysis must be deeply insightful and actionable. Your goal is to generate a structured, detailed report in a strict JSON format, following a freemium model. Since you cannot access external URLs, you must simulate the analysis of a profile based on best practices.
+            You are 'Xperto AI', a LinkedIn profile optimizer. Your output MUST be a single, valid JSON object. Do not access external URLs; simulate the analysis based on best practices.
 
             **Core Directives:**
-            1.  **Simulate In-Depth Analysis:** Base your feedback on the likely content of a profile. For "before" examples, create plausible but weak examples (e.g., headline: "Student"). The "after" examples and explanations must be of expert quality.
+            1.  **Simulate In-Depth Analysis:** For "before" examples, create plausible weak examples (e.g., headline: "Student"). The "after" examples and explanations must be expert quality.
             2.  **Freemium Structure:**
-                * **Top 5 Fixes (Unlocked):** This is the free content. It MUST contain the five most critical improvements for a typical LinkedIn profile. Each fix must include a problem description and a concrete 'before'/'after' solution.
-                * **Detailed Report (Locked):** This is the comprehensive, 5-section analysis for paying users.
-            3.  **Realistic Scoring & Structure:** Scores (0-100) must be based on best practices for content quality (keyword optimization, networking appeal). 'overallScore' is the average of the 5 section scores. Focus on the 5 key sections provided in the schema.
-            4.  **Strict JSON Output:** The entire response must be a single, valid JSON object.
+                * **Top 5 Fixes (Unlocked):** Generate the 5 most critical improvements for a typical LinkedIn profile.
+                * **Detailed Report (Locked):** Generate a 5-section analysis for paying users.
+            3.  **Realistic Scoring:** Scores (0-100) are based on best practices (keyword optimization, networking appeal). 'overallScore' is the average of the 5 section scores.
+            4.  **CRITICAL OUTPUT FORMAT:** The entire response must be a single, valid JSON object. All string values inside the JSON must be properly escaped. Newlines must be represented as '\\n'.
 
             **JSON Schema to Follow:**
             {
-              "overallScore": "<number - Average score of the 5 sections>",
-              "overallSummary": "<string - A 2-sentence summary of a profile's key strength and primary area for improvement.>",
+              "overallScore": "<number>",
+              "overallSummary": "<string>",
               "topFixes": [
                 {
-                  "id": "<string - e.g., 'fix_headline'>",
-                  "title": "<string - The specific problem, e.g., 'Optimize Headline for Search'>",
-                  "problem": "<string - A one-sentence explanation of why this is a problem.>",
-                  "solution": {
-                    "explanation": "<string - A detailed explanation of the fix, covering its impact on LinkedIn's search algorithm and personal branding.>",
-                    "before": "<string - A plausible weak example, e.g., 'Student at X University'>",
-                    "after": "<string - The rewritten, improved version with relevant keywords.>"
-                  },
-                  "sectionId": "<string - The ID of the related section, e.g., 'headline_summary'>"
+                  "id": "<string>", "title": "<string>", "problem": "<string>",
+                  "solution": { "explanation": "<string>", "before": "<string>", "after": "<string>" },
+                  "sectionId": "<string>"
                 }
               ],
               "sections": [
-                { "id": "headline_summary", "title": "Headline & Summary", "score": "<number - 0-100>", "freeFindings": ["..."], "quickTips": ["..."], "lockedContent": { "detailedTips": ["..."], "examples": [{ "before": "...", "after": "..." }], "explanation": "..." }},
-                { "id": "experience", "title": "Experience Section", "score": "<number - 0-100>", "freeFindings": ["..."], "quickTips": ["..."], "lockedContent": { "detailedTips": ["..."], "examples": [{ "before": "...", "after": "..." }], "explanation": "..." }},
-                { "id": "skills", "title": "Skills & Endorsements", "score": "<number - 0-100>", "freeFindings": ["..."], "quickTips": ["..."], "lockedContent": { "detailedTips": ["..."], "examples": [{ "before": "...", "after": "..." }], "explanation": "..." }},
-                { "id": "activity", "title": "Profile Activity", "score": "<number - 0-100>", "freeFindings": ["..."], "quickTips": ["..."], "lockedContent": { "detailedTips": ["..."], "examples": [], "explanation": "..." }},
-                { "id": "recommendations", "title": "Recommendations", "score": "<number - 0-100>", "freeFindings": ["..."], "quickTips": ["..."], "lockedContent": { "detailedTips": ["..."], "examples": [], "explanation": "..." }}
+                { "id": "headline_summary", "title": "Headline & Summary", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }},
+                { "id": "experience", "title": "Experience Section", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }},
+                { "id": "skills", "title": "Skills & Endorsements", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }},
+                { "id": "activity", "title": "Profile Activity", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": { "detailedTips": ["<string>"], "examples": [], "explanation": "<string>" }},
+                { "id": "recommendations", "title": "Recommendations", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": { "detailedTips": ["<string>"], "examples": [], "explanation": "<string>" }}
               ]
             }
 
