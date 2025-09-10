@@ -98,10 +98,10 @@
         const Header = () => {
             const [isMenuOpen, setIsMenuOpen] = React.useState(false);
             const navItems = [
-                { id: 'home', label: 'Home', href: '/index.html' },
-                { id: 'courses', label: 'Courses', href: '/courses.html' },
-                { id: 'analyzer', label: 'AI Analyzer', href: '/analyzer.html' },
-                { id: 'freelance', label: 'Find Internships', href: '/internships.html' },
+                { id: 'home', label: 'Home', href: '/index' },
+                { id: 'courses', label: 'Courses', href: '/courses' },
+                { id: 'analyzer', label: 'AI Analyzer', href: '/analyzer' },
+                { id: 'freelance', label: 'Find Internships', href: '/internships' },
             ];
             
             const currentPage = window.location.pathname.split('/').pop().split('.')[0] || 'index';
@@ -111,7 +111,7 @@
             return (
                 <header className="bg-black/50 backdrop-blur-md sticky top-0 z-40 border-b border-gray-800">
                     <nav className="container mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
-                        <a href="/index.html" className="flex items-center cursor-pointer">
+                        <a href="/index" className="flex items-center cursor-pointer">
                             <Logo />
                         </a>
                         <div className="hidden md:flex items-center space-x-8">
@@ -163,9 +163,9 @@
                         <div>
                             <h3 className="font-semibold mb-4">Navigate</h3>
                             <ul className="space-y-2 text-gray-400 text-sm">
-                                <li><a href="/courses.html" className="hover:text-[#00C853]">Courses</a></li>
-                                <li><a href="/analyzer.html" className="hover:text-[#00C853]">AI Analyzer</a></li>
-                                <li><a href="/internships.html" className="hover:text-[#00C853]">Find Internships</a></li>
+                                <li><a href="/courses" className="hover:text-[#00C853]">Courses</a></li>
+                                <li><a href="/analyzer" className="hover:text-[#00C853]">AI Analyzer</a></li>
+                                <li><a href="/internships" className="hover:text-[#00C853]">Find Internships</a></li>
                             </ul>
                         </div>
                         <div>
@@ -316,3 +316,4 @@
     </script>
 </body>
 </html>
+
