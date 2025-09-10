@@ -23,13 +23,13 @@ exports.handler = async function (event, context) {
       return { statusCode: 400, body: "Bad Request: Prompt is missing." };
     }
 
-    // **FIX**: Use the 'latest' version for potential speed improvements and add a generationConfig.
-    // Explicitly requesting JSON output makes the model faster and more reliable,
-    // which is crucial for avoiding serverless function timeouts.
+    // Use the 'latest' version for potential speed improvements and add a generationConfig.
+    // Explicitly requesting JSON output makes the model faster and more reliable.
     const model = genAI.getGenerativeModel({
       model: "gemini-1.5-flash-latest",
       generationConfig: {
-        responseMimeType: "application/json",
+        // **FIX**: Corrected parameter name from responseMimeType to response_mime_type.
+        response_mime_type: "application/json",
       },
     });
 
@@ -61,3 +61,4 @@ exports.handler = async function (event, context) {
     };
   }
 };
+
