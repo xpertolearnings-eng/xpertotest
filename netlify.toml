@@ -1,2 +1,11 @@
 [functions]
-  directory = "netlify/functions/"
+directory = "netlify/functions/"
+
+# This plugin ensures that dependencies from the root package.json are installed for serverless functions.
+[[plugins]]
+package = "@netlify/plugin-functions-install-core"
+
+# This setting ensures that you can navigate to /courses instead of /courses.html
+[build.processing]
+[build.processing.html]
+pretty_urls = true
