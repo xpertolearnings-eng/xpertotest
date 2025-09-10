@@ -67,20 +67,26 @@
 
     <script type="text/babel">
         // --- GEMINI API CALL HELPERS ---
+        // This function attempts to parse a JSON response, cleaning it if it's wrapped in markdown.
         const parseGeminiResponse = (responseText) => {
             try {
+                // First, try to parse it as-is.
                 return JSON.parse(responseText);
             } catch (e) {
                 console.warn("Response was not clean JSON, attempting to clean markdown...");
                 let jsonString = responseText.trim();
+                
+                // Remove markdown code block fences (```json ... ``` or ``` ... ```)
                 if (jsonString.startsWith('```json')) {
                     jsonString = jsonString.substring(7, jsonString.length - 3).trim();
                 } else if (jsonString.startsWith('```')) {
                     jsonString = jsonString.substring(3, jsonString.length - 3).trim();
                 }
 
+                // Find the first '{' and the last '}' to extract the JSON object.
                 const startIndex = jsonString.indexOf('{');
                 const endIndex = jsonString.lastIndexOf('}');
+                
                 if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
                      throw new Error("Could not find a valid JSON object in the server response.");
                 }
@@ -90,8 +96,10 @@
             }
         };
         
+        // This is the generic function to call our Netlify serverless function.
         const callGeminiAPI = async (systemPrompt) => {
             try {
+                // The endpoint for our serverless function.
                 const url = window.location.origin + '/.netlify/functions/call-gemini';
                 const response = await fetch(url, {
                     method: 'POST',
@@ -105,23 +113,17 @@
                 }
                 
                 const responseText = await response.text();
-                try {
-                    const report = JSON.parse(responseText);
-                    console.log("Received and parsed detailed report from Netlify function:", report);
-                    return report;
-                } catch (e) {
-                    console.error("Failed to parse the JSON response from the server.", e);
-                    console.error("Raw response from server:", responseText);
-                    const report = parseGeminiResponse(responseText);
-                    return report;
-                }
-
+                // Use our robust parser to get the JSON report.
+                const report = parseGeminiResponse(responseText);
+                console.log("Received and parsed detailed report from Netlify function:", report);
+                return report;
             } catch (error) {
                 console.error("Failed to fetch analysis from Netlify function:", error);
                 throw error;
             }
         };
 
+        // This function creates the specific prompt for RESUME analysis.
         const callResumeGeminiAPI = (resumeText) => {
             console.log("Calling Netlify Function for RESUME analysis with improved prompt...");
             const systemPrompt = `
@@ -150,20 +152,6 @@
                   "hint": "<string - e.g., 'Adding numbers shows your impact.'>",
                   "score": "<number - e.g., 9>",
                   "sectionId": "<string - e.g., 'experience'>"
-                },
-                {
-                  "id": "<string - e.g., 'fix2'>",
-                  "title": "<string - e.g., 'Add a Professional Summary'>",
-                  "hint": "<string - e.g., 'Summarize your key skills and career goals upfront.'>",
-                  "score": "<number - e.g., 8>",
-                  "sectionId": "<string - e.g., 'summary'>"
-                },
-                {
-                  "id": "<string - e.g., 'fix3'>",
-                  "title": "<string - e.g., 'Tailor Skills to Job Descriptions'>",
-                  "hint": "<string - e.g., 'Match keywords from target roles.'>",
-                  "score": "<number - e.g., 7>",
-                  "sectionId": "<string - e.g., 'skills'>"
                 }
               ],
               "sections": [
@@ -178,66 +166,6 @@
                     "examples": [{ "before": "<string - Snippet from user's resume>", "after": "<string - A rewritten, improved version>" }],
                     "explanation": "<string - Why the 'after' version is better for ATS and recruiters.>"
                   }
-                },
-                {
-                  "id": "experience",
-                  "title": "Work Experience",
-                  "score": "<number - 0-100 score>",
-                  "freeFindings": ["<string - e.g., 'Used action verbs like "Managed" and "Developed".'>"],
-                  "quickTips": ["<string - e.g., 'Start each bullet point with a strong action verb.'>"],
-                  "lockedContent": {
-                    "detailedTips": ["<string - e.g., 'Focus on the STAR method (Situation, Task, Action, Result) to frame your accomplishments. Quantify results with metrics like percentages, revenue figures, or time saved.'>"],
-                    "examples": [{ "before": "<string - e.g., 'Responsible for managing social media accounts.'>", "after": "<string - e.g., 'Grew social media engagement by 35% over 6 months by implementing a data-driven content strategy across Instagram and Twitter.'>" }],
-                    "explanation": "<string - e.g., 'The "after" example uses a specific metric (35%) and action-oriented language, making the achievement much more concrete and impressive.'>"
-                  }
-                },
-                {
-                  "id": "skills",
-                  "title": "Skills",
-                  "score": "<number - 0-100 score>",
-                  "freeFindings": ["<string - e.g., 'A good mix of technical and soft skills is listed.'>"],
-                  "quickTips": ["<string - e.g., 'Separate skills into categories like "Programming Languages", "Tools", and "Certifications".'>"],
-                  "lockedContent": {
-                    "detailedTips": ["<string - e.g., 'Ensure your skills section mirrors the keywords found in job descriptions for your target roles. ATS often screen for these exact keywords.'>"],
-                    "examples": [{ "before": "<string - e.g., 'Skills: Python, Leadership, JavaScript'>", "after": "<string - e.g., 'Technical Skills: Python (Pandas, NumPy), JavaScript (React, Node.js), SQL, AWS (S3, EC2)\\nSoft Skills: Project Management, Team Leadership, Agile Methodologies'>" }],
-                    "explanation": "<string - Categorization and adding specific libraries/frameworks makes your proficiency clearer and is better for keyword matching.'>"
-                  }
-                },
-                {
-                  "id": "projects",
-                  "title": "Projects",
-                  "score": "<number - 0-100 score>",
-                  "freeFindings": ["<string - e.g., 'Project descriptions are clear.'>"],
-                  "quickTips": ["<string - e.g., 'Include a link to the live project or GitHub repository.'>"],
-                  "lockedContent": {
-                    "detailedTips": ["<string - e.g., 'For each project, briefly describe the problem you solved, the tech stack you used, and your specific contribution.'>"],
-                    "examples": [{ "before": "<string - e.g., 'Made a website.'>", "after": "<string - e.g., 'Portfolio Website: Developed a responsive personal portfolio using React and Tailwind CSS, deployed on Vercel. Implemented a contact form with Netlify Forms.'>" }],
-                    "explanation": "<string - The improved version clearly states the purpose, technologies, and features, demonstrating practical skills.'>"
-                  }
-                },
-                {
-                  "id": "education",
-                  "title": "Education",
-                  "score": "<number - 0-100 score>",
-                  "freeFindings": ["<string - e.g., 'Education section is formatted correctly.'>"],
-                  "quickTips": ["<string - e.g., 'Include your expected graduation date if you are still a student.'>"],
-                  "lockedContent": {
-                    "detailedTips": ["<string - e.g., 'If your GPA is above 3.5 (or equivalent), include it. You can also list relevant coursework to showcase specialized knowledge.'>"],
-                    "examples": [{ "before": "<string - e.g., 'B.Tech, Computer Science'>", "after": "<string - e.g., 'Bachelor of Technology in Computer Science, XYZ University (Expected May 2025)\\nCGPA: 8.5/10\\nRelevant Coursework: Data Structures & Algorithms, Database Management Systems, Operating Systems.'>" }],
-                    "explanation": "<string - Adding GPA, graduation date, and relevant courses provides recruiters with more context about your academic performance and knowledge base.'>"
-                  }
-                },
-                {
-                  "id": "other",
-                  "title": "Achievements/Other",
-                  "score": "<number - 0-100 score>",
-                  "freeFindings": ["<string - e.g., 'Includes certifications.'>"],
-                  "quickTips": ["<string - e.g., 'Create a separate section for "Certifications" or "Awards" if you have several.'>"],
-                  "lockedContent": {
-                    "detailedTips": ["<string - e.g., 'Quantify achievements from hackathons or competitions (e.g., "1st place out of 50 teams"). Mention leadership roles in clubs or organizations.'>"],
-                    "examples": [{ "before": "<string - e.g., 'Won a hackathon.'>", "after": "<string - e.g., 'Winner, Smart India Hackathon 2023: Led a team of 4 to develop a prize-winning solution for a healthcare challenge statement, placing 1st among 100+ competing teams.'>" }],
-                    "explanation": "<string - Specificity about the event, your role, and the scale of your achievement makes it far more impactful.'>"
-                  }
                 }
               ]
             }
@@ -249,23 +177,24 @@
             return callGeminiAPI(systemPrompt);
         };
         
-        const callLinkedInGeminiAPI = (profileUrl) => {
-            console.log("Calling Netlify Function for LINKEDIN analysis with improved prompt...");
+        // **FIXED**: This function now creates a specific prompt for LINKEDIN PROFILE (from PDF text) analysis.
+        const callLinkedInPdfGeminiAPI = (profileText) => {
+            console.log("Calling Netlify Function for LINKEDIN PDF analysis with improved prompt...");
             const systemPrompt = `
-            You are 'Xperto AI', a world-class LinkedIn profile optimizer for the edtech platform Xperto. Your analysis must be sharp, specific, and focused on making the user's profile highly attractive to recruiters. You must not give generic advice. Your goal is to generate a structured, actionable report in a strict JSON format. You will be given a URL, and you should analyze the profile based on the public information typically available on a LinkedIn profile.
+            You are 'Xperto AI', a world-class LinkedIn profile optimizer for the edtech platform Xperto. Your analysis must be sharp, specific, and based on the provided text from a user's LinkedIn profile PDF export. Your goal is to generate a structured, actionable report in a strict JSON format.
 
             **Core Directives:**
             1.  **Recruiter & Networking Focus:** Every piece of advice must be geared towards optimizing the profile for search visibility (LinkedIn SEO), recruiter appeal, and professional networking.
-            2.  **Strictly Content-Specific:** All findings, scores, tips, and examples must be based on what a strong LinkedIn profile should contain. When creating 'before' examples, infer what a weak version might look like if the user's profile is strong, or use their actual (implied) content if it's weak.
-            3.  **Realistic Scoring Logic:** Scores (0-100) must be calculated logically based on best practices for a strong professional profile.
-                * **Weak Content:** Vague, generic, or default content must result in a low score. For example, a headline of just "Student at University" **MUST receive a score below 30**. An empty or very brief 'About' section should also be scored very low.
-                * **High Score Criteria (80+):** To earn a high score, a section must be highly optimized. A headline needs multiple keywords. The 'About' section must tell a story. 'Experience' entries must have quantified achievements. The 'Skills' section should be populated and have endorsements (which you can infer as a best practice to recommend).
+            2.  **Strictly Content-Specific:** All findings, scores, and examples must be directly derived from the provided profile text. Do not invent information.
+            3.  **Realistic Scoring Logic:** Scores (0-100) must be calculated logically based on the provided text and LinkedIn best practices.
+                * **Weak Content:** Vague, generic, or missing sections must result in a low score. For example, a headline of just "Student at University" **MUST receive a score below 30**. An empty or very brief 'About' section should also be scored very low.
+                * **High Score Criteria (80+):** To earn a high score, a section must be highly optimized. A headline needs multiple keywords. The 'About' section must tell a story. 'Experience' entries must have quantified achievements.
                 * **Overall Score:** The 'overallScore' is a simple average of all the section scores.
-            4.  **Actionable & Detailed Feedback:** 'freeFindings' are high-level observations. 'quickTips' are simple fixes. 'lockedContent' must provide deep, expert-level advice, with 'detailedTips' explaining the "why," and 'examples' showing concrete, rewritten improvements.
+            4.  **Actionable & Detailed Feedback:** 'freeFindings' are high-level observations. 'quickTips' are simple fixes. 'lockedContent' must provide deep, expert-level advice with concrete 'before' and 'after' examples based on the user's text.
             5.  **Strict JSON Output:** The entire response must be a single, valid JSON object adhering to the schema below. No extra text or explanations.
 
             **JSON Schema to Follow:**
-            {
+             {
               "overallScore": "<number - Average score of all sections>",
               "overallSummary": "<string - A 2-sentence summary of the profile's key strengths and primary area for improvement.>",
               "topFixes": [
@@ -275,92 +204,31 @@
                   "hint": "<string - e.g., 'Your headline is crucial for recruiter searches.'>",
                   "score": "<number - e.g., 10>",
                   "sectionId": "<string - e.g., 'headline'>"
-                },
-                {
-                  "id": "<string - e.g., 'fix_about'>",
-                  "title": "<string - e.g., 'Craft a Compelling "About" Section'>",
-                  "hint": "<string - e.g., 'Tell your professional story to engage readers.'>",
-                  "score": "<number - e.g., 8>",
-                  "sectionId": "<string - e.g., 'about'>"
-                },
-                {
-                  "id": "<string - e.g., 'fix_experience'>",
-                  "title": "<string - e.g., 'Detail Your Experience with Metrics'>",
-                  "hint": "<string - e.g., 'Show your impact, don't just list duties.'>",
-                  "score": "<number - e.g., 9>",
-                  "sectionId": "<string - e.g., 'experience'>"
                 }
               ],
               "sections": [
                 {
-                  "id": "profile_picture",
-                  "title": "Profile Picture & Banner",
-                  "score": "<number - 0-100 score>",
-                  "freeFindings": ["<string - e.g., 'Has a professional headshot.'>"],
-                  "quickTips": ["<string - e.g., 'Ensure your banner image reflects your professional interests or industry.'>"],
-                  "lockedContent": {
-                    "detailedTips": ["<string - A professional photo should be high-resolution, with a plain background, where you are looking at the camera and smiling. A custom banner is much better than the default.'>"],
-                    "examples": [{ "before": "<string - A description of a weak photo/banner, e.g., 'Using a distant group photo and default blue banner.'>", "after": "<string - A description of a strong photo/banner, e.g., 'Clear, friendly headshot with a custom banner that includes keywords like "Software Development | React | Cloud Computing".'>" }],
-                    "explanation": "<string - First impressions matter. A professional photo and custom banner make your profile look complete and serious.'>"
-                  }
-                },
-                {
                   "id": "headline",
-                  "title": "Headline",
+                  "title": "Headline & Summary",
                   "score": "<number - 0-100 score>",
                   "freeFindings": ["<string - e.g., 'Headline clearly states current role.'>"],
-                  "quickTips": ["<string - e.g., 'Add keywords related to your target roles.'>"],
+                  "quickTips": ["<string - e.g., 'Add keywords like 'React' or 'Data Analysis' to your headline.'>"],
                   "lockedContent": {
-                    "detailedTips": ["<string - Your headline is prime real estate for keywords. Go beyond just your job title. Include key skills, technologies, and what you're passionate about. Use the pipe character '|' to separate ideas.'>"],
-                    "examples": [{ "before": "<string - e.g., 'Student at XYZ University'>", "after": "<string - e.g., 'Aspiring Software Engineer | React, Node.js, and Python Developer | Seeking Internships in Web Development'>" }],
-                    "explanation": "<string - The 'after' headline is rich with keywords recruiters search for, making the profile much more discoverable.'>"
-                  }
-                },
-                {
-                  "id": "about",
-                  "title": "About Section",
-                  "score": "<number - 0-100 score>",
-                  "freeFindings": ["<string - e.g., 'About section provides a good overview.'>"],
-                  "quickTips": ["<string - e.g., 'End with a clear call to action, like inviting people to connect.'>"],
-                  "lockedContent": {
-                    "detailedTips": ["<string - Structure your 'About' section in 3 paragraphs: 1) Who you are and what you're excited about. 2) Your key skills and 1-2 top achievements. 3) What you're looking for and how to contact you. Sprinkle in relevant keywords.'>"],
-                    "examples": [{ "before": "<string - e.g., 'I am a student studying computer science.'>", "after": "<string - e.g., 'Passionate final-year Computer Science student with a strong foundation in full-stack web development... [continues with more detail]... Open to connecting about software engineering internship opportunities.'>" }],
-                    "explanation": "<string - A structured 'About' section tells your professional story, showcases your skills, and makes it easy for recruiters to understand your goals.'>"
-                  }
-                },
-                {
-                  "id": "experience",
-                  "title": "Experience Section",
-                  "score": "<number - 0-100 score>",
-                  "freeFindings": ["<string - e.g., 'Experience descriptions are present.'>"],
-                  "quickTips": ["<string - e.g., 'Use 2-3 bullet points for each role.'>"],
-                  "lockedContent": {
-                    "detailedTips": ["<string - Just like a resume, use action verbs and quantify your achievements with metrics for each role or project listed. This demonstrates impact, not just responsibility.'>"],
-                    "examples": [{ "before": "<string - e.g., 'Wrote code for the company website.'>", "after": "<string - e.g., '- Refactored the checkout process component in React, reducing bug reports by 15% and improving user session duration.\\n- Collaborated with a team of 3 to deploy a new feature using CI/CD pipelines.'>" }],
-                    "explanation": "<string - Specific, quantified bullet points are far more persuasive and give a clear picture of your capabilities.'>"
-                  }
-                },
-                {
-                  "id": "skills",
-                  "title": "Skills & Endorsements",
-                  "score": "<number - 0-100 score>",
-                  "freeFindings": ["<string - e.g., 'Has more than 10 skills listed.'>"],
-                  "quickTips": ["<string - e.g., 'Pin your top 3 most relevant skills to the top of the list.'>"],
-                  "lockedContent": {
-                    "detailedTips": ["<string - Aim for at least 15-20 relevant skills. The more skills you have that match a job description, the higher you may rank in recruiter searches. Actively seek endorsements from colleagues and professors for your top skills.'>"],
-                    "examples": [{ "before": "<string - e.g., 'Only having 5 skills listed with no endorsements.'>", "after": "<string - e.g., 'Having 20+ skills, with the top 3 (e.g., "React.js", "Node.js", "Python") pinned and endorsed by multiple connections.'>" }],
-                    "explanation": "<string - A robust skills section with endorsements provides social proof of your abilities and significantly boosts your profile's visibility in searches.'>"
+                    "detailedTips": ["<string - Your headline is the most important part of your profile for search. It should be more than just your job title. Include key skills and the value you provide.'>"],
+                    "examples": [{ "before": "<string - A weak headline from the user's text>", "after": "<string - An improved, keyword-rich headline>" }],
+                    "explanation": "<string - An optimized headline makes you more visible to recruiters searching for specific skills.'>"
                   }
                 }
               ]
             }
 
-            **LinkedIn Profile URL to Analyze:**
+            **LinkedIn Profile Text to Analyze:**
             ---
-            ${profileUrl}
+            ${profileText}
             ---`;
             return callGeminiAPI(systemPrompt);
         };
+
 
         // --- ASSETS & ICONS ---
         const Logo = () => (
@@ -387,19 +255,19 @@
         const Header = () => {
             const [isMenuOpen, setIsMenuOpen] = React.useState(false);
             const navItems = [
-                { id: 'home', label: 'Home', href: '/' },
-                { id: 'courses', label: 'Courses', href: '/courses' },
-                { id: 'analyzer', label: 'AI Analyzer', href: '/analyzer' },
-                { id: 'freelance', label: 'Find Internships', href: '/internships' },
+                { id: 'home', label: 'Home', href: '/index.html' },
+                { id: 'courses', label: 'Courses', href: '/courses.html' },
+                { id: 'analyzer', label: 'AI Analyzer', href: '/analyzer.html' },
+                { id: 'freelance', label: 'Find Internships', href: '/internships.html' },
             ];
             
-            const currentPage = window.location.pathname.split('/').pop() || 'index';
+            const currentPage = window.location.pathname.split('/').pop().split('.')[0] || 'index';
             const activePageId = currentPage === 'index' ? 'home' : currentPage;
 
             return (
                 <header className="bg-black/50 backdrop-blur-md sticky top-0 z-40 border-b border-gray-800">
                     <nav className="container mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
-                        <a href="/" className="flex items-center cursor-pointer">
+                        <a href="/index.html" className="flex items-center cursor-pointer">
                             <Logo />
                         </a>
                         <div className="hidden md:flex items-center space-x-8">
@@ -451,9 +319,9 @@
                         <div>
                             <h3 className="font-semibold mb-4">Navigate</h3>
                             <ul className="space-y-2 text-gray-400 text-sm">
-                                <li><a href="/courses" className="hover:text-[#00C853]">Courses</a></li>
-                                <li><a href="/analyzer" className="hover:text-[#00C853]">AI Analyzer</a></li>
-                                <li><a href="/internships" className="hover:text-[#00C853]">Find Internships</a></li>
+                                <li><a href="/courses.html" className="hover:text-[#00C853]">Courses</a></li>
+                                <li><a href="/analyzer.html" className="hover:text-[#00C853]">AI Analyzer</a></li>
+                                <li><a href="/internships.html" className="hover:text-[#00C853]">Find Internships</a></li>
                             </ul>
                         </div>
                         <div>
@@ -498,24 +366,19 @@
         const AnalyzerPage = ({ showNotification }) => {
             const [analyzerType, setAnalyzerType] = React.useState('resume');
             
-            // Resume states
+            // Shared states for both analyzers
             const [file, setFile] = React.useState(null);
-            const [resumeText, setResumeText] = React.useState('');
-            
-            // LinkedIn states
-            const [url, setUrl] = React.useState('');
-
-            // Shared states
+            const [fileText, setFileText] = React.useState(''); // Used for both resume and LinkedIn PDF text
             const [report, setReport] = React.useState(null);
             const [isReportUnlocked, setIsReportUnlocked] = React.useState(false);
             const [loading, setLoading] = React.useState(false);
             const [activeView, setActiveView] = React.useState({ type: 'top_fixes', id: null });
             const [openAccordionId, setOpenAccordionId] = React.useState(null);
 
+            // Resets state when switching between analyzers
             const resetState = () => {
                 setFile(null);
-                setResumeText('');
-                setUrl('');
+                setFileText('');
                 setReport(null);
                 setIsReportUnlocked(false);
                 setLoading(false);
@@ -529,11 +392,12 @@
 
 
             const getScoreColor = (score) => {
-                if (score <= 60) return '#ef4444'; // Red
-                if (score <= 90) return '#facc15'; // Yellow
-                return '#4ade80'; // Green
+                if (score < 50) return '#ef4444'; // Red for scores below 50
+                if (score < 80) return '#facc15'; // Yellow for scores between 50 and 79
+                return '#4ade80'; // Green for scores 80 and above
             };
             
+            // Handles PDF file selection and text extraction
             const handleFileChange = async (e) => {
                 const uploadedFile = e.target.files[0];
                 if (!uploadedFile) return;
@@ -550,18 +414,25 @@
                             const text = await page.getTextContent();
                             textContent += text.items.map(s => s.str).join(' ');
                         }
-                        setResumeText(textContent);
-                        showNotification('Resume loaded successfully!', 'success');
+                        setFileText(textContent);
+                        showNotification('File loaded successfully!', 'success');
                     } catch (error) {
                         console.error("Error parsing PDF:", error);
                         showNotification('Could not read the PDF file.', 'error');
                         setFile(null);
+                        setFileText('');
                     }
                 };
                 reader.readAsArrayBuffer(uploadedFile);
             };
 
+            // Main function to trigger the AI analysis with retry logic
             const handleAnalyze = async () => {
+                if (!fileText) {
+                    showNotification('Please upload a file to analyze.', 'error');
+                    return;
+                }
+
                 setLoading(true);
                 setReport(null);
 
@@ -572,19 +443,9 @@
                     try {
                         console.log(`Analysis attempt ${attempt}...`);
                         if (analyzerType === 'resume') {
-                            if (!resumeText) {
-                                showNotification('Please upload a resume to analyze.', 'error');
-                                setLoading(false);
-                                return;
-                            }
-                            result = await callResumeGeminiAPI(resumeText);
-                        } else {
-                            if (!url.trim()) {
-                                showNotification('Please enter a LinkedIn profile URL.', 'error');
-                                setLoading(false);
-                                return;
-                            }
-                            result = await callLinkedInGeminiAPI(url);
+                            result = await callResumeGeminiAPI(fileText);
+                        } else { // LinkedIn
+                            result = await callLinkedInPdfGeminiAPI(fileText);
                         }
 
                         if (result) {
@@ -594,16 +455,15 @@
                     } catch (error) {
                         console.error(`Attempt ${attempt} failed:`, error);
                         if (attempt === maxAttempts) {
-                            setLoading(false);
                             const errorMessage = error.message.toLowerCase();
                             if (errorMessage.includes("503") || errorMessage.includes("overloaded")) {
                                 showNotification('AI analyzer is busy. Please try again in a moment.', 'error');
                             } else {
                                 showNotification('Analysis failed after multiple attempts. Please try again.', 'error');
                             }
-                            return;
                         }
-                        await new Promise(res => setTimeout(res, 1000));
+                        // Wait before retrying
+                        await new Promise(res => setTimeout(res, 1000 * attempt)); 
                     }
                 }
                 
@@ -617,8 +477,8 @@
                         setOpenAccordionId(firstFix.id);
                     }
                     showNotification('Free analysis complete!', 'success');
-                } else if (!result && maxAttempts > 0) {
-                     showNotification('Analysis failed. Please try again.', 'error');
+                } else {
+                     showNotification('Analysis failed. Please check the console for details and try again.', 'error');
                 }
             };
             
@@ -873,12 +733,12 @@
                         {analyzerType === 'resume' ? (
                             <Card className="p-6 sm:p-8 hover:border-[#00C853]/50 transition-colors">
                                 <div className="flex justify-center">
-                                    <label htmlFor="resume-upload" className="cursor-pointer text-center p-8 border-2 border-dashed border-gray-600 rounded-xl hover:border-green-500 hover:bg-gray-800/50 transition-colors w-full">
+                                    <label htmlFor="file-upload" className="cursor-pointer text-center p-8 border-2 border-dashed border-gray-600 rounded-xl hover:border-green-500 hover:bg-gray-800/50 transition-colors w-full">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
                                         <p className="mt-2 font-semibold text-white">Click to Upload your Resume</p>
                                         <p className="text-xs text-gray-500">PDF up to 5MB</p>
                                     </label>
-                                    <input id="resume-upload" type="file" accept=".pdf" onChange={handleFileChange} className="hidden"/>
+                                    <input id="file-upload" type="file" accept=".pdf" onChange={handleFileChange} className="hidden"/>
                                 </div>
                                 {file && <p className="mt-4 text-sm text-center text-gray-400">Selected: <span className="font-semibold text-gray-200">{file.name}</span></p>}
                                 <button onClick={handleAnalyze} disabled={loading || !file} className="mt-6 w-full py-3 font-semibold text-black bg-[#00C853] rounded-lg hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed transition-transform duration-200 disabled:transform-none hover:scale-105">
@@ -886,13 +746,20 @@
                                 </button>
                             </Card>
                         ) : (
+                             // **FIXED**: This now uses a file upload for LinkedIn profiles.
                             <Card className="p-6 sm:p-8 hover:border-[#00C853]/50 transition-colors">
-                                <div className="space-y-4">
-                                    <input type="text" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Paste your LinkedIn Profile URL here" className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-[#00C853] focus:outline-none"/>
-                                    <button onClick={handleAnalyze} disabled={loading || !url} className="w-full py-3 font-semibold text-black bg-[#00C853] rounded-lg hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed transition-transform duration-200 disabled:transform-none hover:scale-105">
-                                        {loading ? 'Analyzing...' : 'Analyze My LinkedIn'}
-                                    </button>
+                                <div className="flex justify-center">
+                                    <label htmlFor="file-upload" className="cursor-pointer text-center p-8 border-2 border-dashed border-gray-600 rounded-xl hover:border-green-500 hover:bg-gray-800/50 transition-colors w-full">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-500" viewBox="0 0 24 24" fill="currentColor"><path d="M22.23,20.19,15.6,13.56a1,1,0,0,0-1.41,0L13.5,14.25a1,1,0,0,1-1.41,0L9.88,12a1,1,0,0,0-1.41,0L2,17.47V4A1,1,0,0,1,3,3H21a1,1,0,0,1,1,1ZM21,1H3A3,3,0,0,0,0,4V20a3,3,0,0,0,3,3H21a3,3,0,0,0,3-3V4A3,3,0,0,0,21,1Z"/></svg>
+                                        <p className="mt-2 font-semibold text-white">Click to Upload your LinkedIn Profile</p>
+                                        <p className="text-xs text-gray-500">How to: Go to your profile > More > Save to PDF</p>
+                                    </label>
+                                    <input id="file-upload" type="file" accept=".pdf" onChange={handleFileChange} className="hidden"/>
                                 </div>
+                                {file && <p className="mt-4 text-sm text-center text-gray-400">Selected: <span className="font-semibold text-gray-200">{file.name}</span></p>}
+                                <button onClick={handleAnalyze} disabled={loading || !file} className="w-full mt-6 py-3 font-semibold text-black bg-[#00C853] rounded-lg hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed transition-transform duration-200 disabled:transform-none hover:scale-105">
+                                    {loading ? 'Analyzing...' : 'Analyze My LinkedIn'}
+                                </button>
                             </Card>
                         )}
                     </div>
@@ -973,6 +840,9 @@
                                             );
                                         })}
                                     </div>
+                                    <button onClick={resetState} className="w-full mt-4 py-2 text-sm font-semibold text-gray-300 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors">
+                                        Analyze Another
+                                    </button>
                                 </div>
                             </aside>
 
@@ -1029,5 +899,3 @@
     </script>
 </body>
 </html>
-
-
