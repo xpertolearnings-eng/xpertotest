@@ -41,13 +41,19 @@ exports.handler = async function (event, context) {
       body: text,
     };
   } catch (error) {
-    // Log the error for debugging purposes.
-    console.error("Error calling Gemini API:", error);
+    // **IMPROVED ERROR HANDLING**
+    // Log the full, detailed error to the Netlify function logs for debugging.
+    console.error("Detailed error calling Gemini API:", error);
 
-    // Return an error response to the frontend.
+    // Return a more specific error message to the frontend.
+    // This will help us see the exact problem in the browser's developer console.
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Failed to fetch analysis from AI." }),
+      body: JSON.stringify({ 
+          error: "Failed to fetch analysis from AI.",
+          details: error.message || "An unknown error occurred on the server."
+      }),
     };
   }
 };
+
