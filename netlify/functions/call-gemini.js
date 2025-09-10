@@ -24,8 +24,8 @@ exports.handler = async function (event, context) {
     }
 
     // Initialize the Generative Model.
-    // Use the gemini-pro model for this kind of text-based analysis.
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    // Use the gemini-1.0-pro model for this kind of text-based analysis.
+    const model = genAI.getGenerativeModel({ model: "gemini-1.0-pro" });
 
     // Send the prompt to the Gemini API.
     const result = await model.generateContent(prompt);
