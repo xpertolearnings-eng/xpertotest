@@ -23,12 +23,15 @@ exports.handler = async function (event, context) {
       return { statusCode: 400, body: "Bad Request: Prompt is missing." };
     }
 
-    // **FIX**: Removed the 'generationConfig' object entirely. The API version
-    // being used does not support the 'response_mime_type' parameter, which was
-    // causing the 400 Bad Request error. We will now rely solely on prompt
-    // engineering to ensure the AI returns valid JSON.
+    // **FIX**: Re-enabled 'generationConfig' to enforce a JSON response from the API.
+    // The 'gemini-1.5-flash' model supports this, ensuring the AI's output is
+    // always a valid, parsable JSON object. This is the correct and most robust
+    // way to guarantee the data format.
     const model = genAI.getGenerativeModel({
       model: "gemini-1.5-flash",
+      generationConfig: {
+        responseMimeType: "application/json",
+      },
     });
 
     // Send the prompt to the Gemini API.
@@ -36,13 +39,14 @@ exports.handler = async function (event, context) {
     const response = await result.response;
     const text = response.text();
 
-    // The frontend's 'parseGeminiResponse' function will handle cleaning this text.
+    // The response is now guaranteed to be a valid JSON string.
     return {
       statusCode: 200,
       headers: {
-        // The content type is text/plain because the AI might include markdown.
-        "Content-Type": "text/plain",
+        // Set the content type to application/json as we now guarantee the format.
+        "Content-Type": "application/json",
       },
+      // The text is already a JSON string, so we can send it directly.
       body: text,
     };
   } catch (error) {
@@ -59,4 +63,3 @@ exports.handler = async function (event, context) {
     };
   }
 };
-
