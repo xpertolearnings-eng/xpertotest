@@ -24,8 +24,8 @@ exports.handler = async function (event, context) {
     }
 
     // Initialize the Generative Model.
-    // Use the gemini-1.0-pro model for this kind of text-based analysis.
-    const model = genAI.getGenerativeModel({ model: "gemini-1.0-pro" });
+    // Use the latest gemini-1.5-flash model for better performance and stability.
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     // Send the prompt to the Gemini API.
     const result = await model.generateContent(prompt);
@@ -49,9 +49,9 @@ exports.handler = async function (event, context) {
     // This will help us see the exact problem in the browser's developer console.
     return {
       statusCode: 500,
-      body: JSON.stringify({ 
-          error: "Failed to fetch analysis from AI.",
-          details: error.message || "An unknown error occurred on the server."
+      body: JSON.stringify({
+        error: "Failed to fetch analysis from AI.",
+        details: error.message || "An unknown error occurred on the server.",
       }),
     };
   }
