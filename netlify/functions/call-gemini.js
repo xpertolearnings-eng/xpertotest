@@ -1,73 +1,53 @@
-// netlify/functions/call-gemini.js
+// This file acts as a secure backend intermediary for the Gemini API.
+// It receives a prompt from the frontend, adds the necessary API key,
+// and forwards the request to the Google Generative Language API.
 
-// The 'node-fetch' import has been removed.
-// Netlify functions run on Node.js 18+, which has fetch built-in globally.
+// Import the GoogleGenerativeAI library.
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-exports.handler = async function(event) {
-    // Only allow POST requests
-    if (event.httpMethod !== 'POST') {
-        return { statusCode: 405, body: 'Method Not Allowed' };
+// Access your API key from environment variables for security.
+// You must set this in your Netlify project settings.
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+exports.handler = async function (event, context) {
+  // Only allow POST requests.
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, body: "Method Not Allowed" };
+  }
+
+  try {
+    // Parse the incoming request body to get the prompt.
+    const { prompt } = JSON.parse(event.body);
+
+    if (!prompt) {
+      return { statusCode: 400, body: "Bad Request: Prompt is missing." };
     }
 
-    try {
-        const { prompt } = JSON.parse(event.body);
-        const apiKey = process.env.GEMINI_API_KEY;
+    // Initialize the Generative Model.
+    // Use the gemini-pro model for this kind of text-based analysis.
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-        // Ensure the API key is available
-        if (!apiKey) {
-            throw new Error('GEMINI_API_KEY is not set in Netlify environment variables.');
-        }
-        
-        // Use a v1beta model that supports JSON mode for structured output
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+    // Send the prompt to the Gemini API.
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
 
-        const payload = {
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-                // Crucial for forcing the model to output valid JSON
-                response_mime_type: "application/json",
-            },
-        };
+    // Return the successful response from the AI.
+    return {
+      statusCode: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: text,
+    };
+  } catch (error) {
+    // Log the error for debugging purposes.
+    console.error("Error calling Gemini API:", error);
 
-        // We can now use the native 'fetch' provided by the environment
-        const geminiResponse = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-
-        // Handle errors from the Gemini API
-        if (!geminiResponse.ok) {
-            const errorBody = await geminiResponse.text();
-            console.error('Gemini API Error:', errorBody);
-            return {
-                statusCode: geminiResponse.status,
-                body: JSON.stringify({ error: `Gemini API failed: ${errorBody}` }),
-            };
-        }
-
-        const result = await geminiResponse.json();
-        
-        // Extract the clean JSON text from Gemini's nested response structure
-        // This ensures we send only the valid JSON report back to the frontend
-        const cleanJsonText = result.candidates[0].content.parts[0].text;
-
-        return {
-            statusCode: 200,
-            // Set the header to indicate the response is JSON
-            headers: {
-                "Content-Type": "application/json",
-            },
-            // Return the clean JSON string directly
-            body: cleanJsonText, 
-        };
-
-    } catch (error) {
-        console.error('Error in Netlify function:', error);
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ error: error.message }),
-        };
-    }
+    // Return an error response to the frontend.
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: "Failed to fetch analysis from AI." }),
+    };
+  }
 };
-
