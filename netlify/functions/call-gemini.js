@@ -23,14 +23,12 @@ exports.handler = async function (event, context) {
       return { statusCode: 400, body: "Bad Request: Prompt is missing." };
     }
 
-    // Use the 'latest' version for potential speed improvements and add a generationConfig.
-    // Explicitly requesting JSON output makes the model faster and more reliable.
+    // **FIX**: Removed the 'generationConfig' object entirely. The API version
+    // being used does not support the 'response_mime_type' parameter, which was
+    // causing the 400 Bad Request error. We will now rely solely on prompt
+    // engineering to ensure the AI returns valid JSON.
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash-latest",
-      generationConfig: {
-        // **FIX**: Corrected parameter name from responseMimeType to response_mime_type.
-        response_mime_type: "application/json",
-      },
+      model: "gemini-1.5-flash",
     });
 
     // Send the prompt to the Gemini API.
@@ -38,14 +36,14 @@ exports.handler = async function (event, context) {
     const response = await result.response;
     const text = response.text();
 
-    // The model is now configured to return a raw JSON string.
-    // We can pass this directly to the frontend.
+    // The frontend's 'parseGeminiResponse' function will handle cleaning this text.
     return {
       statusCode: 200,
       headers: {
-        "Content-Type": "application/json",
+        // The content type is text/plain because the AI might include markdown.
+        "Content-Type": "text/plain",
       },
-      body: text, // The body is now a clean JSON string.
+      body: text,
     };
   } catch (error) {
     // Log the full, detailed error to the Netlify function logs for debugging.
