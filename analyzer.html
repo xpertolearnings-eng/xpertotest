@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xperto - AI Analyzer</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='50' fill='%2300C853'/></svg>">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React Libraries -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel for JSX Transpilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- PDF.js for Resume Parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js`;</script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        
+        body { 
+            font-family: 'Inter', sans-serif; 
+            cursor: none; 
+            background-color: #000; 
+        }
+
+        .custom-cursor {
+            position: fixed;
+            width: 24px;
+            height: 24px;
+            border: 2px solid #00C853;
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            transition: width 0.2s, height 0.2s, background-color 0.2s;
+            z-index: 9999;
+            left: -100px; /* Initially hide off-screen */
+        }
+
+        button:hover ~ .custom-cursor, a:hover ~ .custom-cursor, [onclick]:hover ~ .custom-cursor, input[type=file] ~ .custom-cursor, label:hover ~ .custom-cursor {
+             width: 40px;
+             height: 40px;
+             background-color: rgba(0, 200, 83, 0.1);
+        }
+
+        @keyframes fade-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .animate-fade-in {
+            animation: fade-in 0.5s ease-out forwards;
+        }
+        
+        @keyframes slide-in-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide-in-up {
+            animation: slide-in-up 0.6s ease-out forwards;
+        }
+
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // --- GEMINI API CALL HELPERS ---
+        const parseGeminiResponse = (responseText) => {
+            try {
+                return JSON.parse(responseText);
+            } catch (e) {
+                console.warn("Response was not clean JSON, attempting to clean markdown...");
+                let jsonString = responseText.trim();
+                if (jsonString.startsWith('```json')) {
+                    jsonString = jsonString.substring(7, jsonString.length - 3).trim();
+                } else if (jsonString.startsWith('```')) {
+                    jsonString = jsonString.substring(3, jsonString.length - 3).trim();
+                }
+
+                const startIndex = jsonString.indexOf('{');
+                const endIndex = jsonString.lastIndexOf('}');
+                if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+                     throw new Error("Could not find a valid JSON object in the server response.");
+                }
+                
+                const finalJsonString = jsonString.substring(startIndex, endIndex + 1);
+                return JSON.parse(finalJsonString);
+            }
+        };
+        
+        const callGeminiAPI = async (systemPrompt) => {
+            try {
+                const url = window.location.origin + '/.netlify/functions/call-gemini';
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: systemPrompt }),
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Network response was not ok: ${response.status}. ${errorText}`);
+                }
+                
+                const responseText = await response.text();
+                try {
+                    const report = JSON.parse(responseText);
+                    console.log("Received and parsed detailed report from Netlify function:", report);
+                    return report;
+                } catch (e) {
+                    console.error("Failed to parse the JSON response from the server.", e);
+                    console.error("Raw response from server:", responseText);
+                    const report = parseGeminiResponse(responseText);
+                    return report;
+                }
+
+            } catch (error) {
+                console.error("Failed to fetch analysis from Netlify function:", error);
+                throw error;
+            }
+        };
+
+        const callResumeGeminiAPI = (resumeText) => {
+            console.log("Calling Netlify Function for RESUME analysis with improved prompt...");
+            const systemPrompt = `
+            You are 'Xperto AI', a world-class, ATS-focused resume analyzer for the edtech platform Xperto. Your analysis must be sharp, specific, and directly based on the provided resume text. You must not give generic advice. Your goal is to generate a structured, actionable report in a strict JSON format.
+
+            **Core Directives:**
+            1.  **ATS & Recruiter Focus:** Every piece of advice must prioritize compatibility with modern Applicant Tracking Systems (ATS) and appeal to human recruiters.
+            2.  **Strictly Content-Specific:** All findings, scores, tips, and examples MUST be directly derived from the resume text. Do not invent information. Reference specific phrases from the resume where possible.
+            3.  **Realistic Scoring Logic:** Scores (0-100) must be calculated realistically based *only* on the provided text.
+                * **Missing Sections:** If a key section (e.g., 'Projects', 'Work Experience', 'Summary') is completely absent from the resume text, its score **MUST be 10 or lower**. The corresponding 'freeFindings' should explicitly state that the section is missing.
+                * **Content Quality over Presence:** A section's mere presence is not enough for a high score. For example, if a 'Projects' section exists but only says "Made a website," the score should be low (e.g., 20-30).
+                * **High Score Criteria (80+):** To earn a high score, a section must contain strong action verbs, **quantifiable achievements (e.g., 'increased by 20%', 'reduced time by 5 hours')**, and keywords relevant to a professional role.
+                * **Low Score Criteria (< 50):** A low score indicates passive language, vague descriptions without metrics, or a complete lack of detail.
+                * **Overall Score:** The 'overallScore' is a simple average of all the section scores.
+            4.  **Actionable & Detailed Feedback:** 'freeFindings' should be high-level observations. 'quickTips' are simple, immediate fixes. 'lockedContent' must provide deep, expert-level advice, with 'detailedTips' explaining the "why," and 'examples' showing concrete, rewritten improvements based on the user's own text.
+            5.  **Strict JSON Output:** The entire response must be a single, valid JSON object adhering to the schema below. No extra text, markdown, or explanations outside the JSON.
+
+            **JSON Schema to Follow:**
+            {
+              "overallScore": "<number - Average score of all sections>",
+              "overallSummary": "<string - A 2-sentence summary of the resume's key strengths and primary area for improvement.>",
+              "topFixes": [
+                {
+                  "id": "<string - e.g., 'fix1'>",
+                  "title": "<string - e.g., 'Quantify Achievements'>",
+                  "hint": "<string - e.g., 'Adding numbers shows your impact.'>",
+                  "score": "<number - e.g., 9>",
+                  "sectionId": "<string - e.g., 'experience'>"
+                }
+              ],
+              "sections": [
+                {
+                  "id": "summary",
+                  "title": "Professional Summary",
+                  "score": "<number - 0-100 score for this section>",
+                  "freeFindings": ["<string - e.g., 'Summary section is present.' or 'Summary is too long.'>"],
+                  "quickTips": ["<string - e.g., 'Tailor the summary to the job description.'>"],
+                  "lockedContent": {
+                    "detailedTips": ["<string - In-depth advice, e.g., 'Incorporate 2-3 key skills from your target role directly into your summary to immediately catch a recruiter's eye.'>"],
+                    "examples": [{ "before": "<string - Snippet from user's resume>", "after": "<string - A rewritten, improved version>" }],
+                    "explanation": "<string - Why the 'after' version is better for ATS and recruiters.>"
+                  }
+                }
+              ]
+            }
+
+            **Resume Text to Analyze:**
+            ---
+            ${resumeText}
+            ---`;
+            return callGeminiAPI(systemPrompt);
+        };
+        
+        const callLinkedInGeminiAPI = (profileUrl) => {
+            console.log("Calling Netlify Function for LINKEDIN analysis with improved prompt...");
+            const systemPrompt = `
+            You are 'Xperto AI', a world-class LinkedIn profile optimizer for the edtech platform Xperto. Your analysis must be sharp, specific, and focused on making the user's profile highly attractive to recruiters. You must not give generic advice. Your goal is to generate a structured, actionable report in a strict JSON format. You will be given a URL, and you should analyze the profile based on the public information typically available on a LinkedIn profile.
+
+            **Core Directives:**
+            1.  **Recruiter & Networking Focus:** Every piece of advice must be geared towards optimizing the profile for search visibility (LinkedIn SEO), recruiter appeal, and professional networking.
+            2.  **Strictly Content-Specific:** All findings, scores, tips, and examples must be based on what a strong LinkedIn profile should contain. When creating 'before' examples, infer what a weak version might look like if the user's profile is strong, or use their actual (implied) content if it's weak.
+            3.  **Realistic Scoring Logic:** Scores (0-100) must be calculated logically based on best practices for a strong professional profile.
+                * **Weak Content:** Vague, generic, or default content must result in a low score. For example, a headline of just "Student at University" **MUST receive a score below 30**. An empty or very brief 'About' section should also be scored very low.
+                * **High Score Criteria (80+):** To earn a high score, a section must be highly optimized. A headline needs multiple keywords. The 'About' section must tell a story. 'Experience' entries must have quantified achievements. The 'Skills' section should be populated and have endorsements (which you can infer as a best practice to recommend).
+                * **Overall Score:** The 'overallScore' is a simple average of all the section scores.
+            4.  **Actionable & Detailed Feedback:** 'freeFindings' are high-level observations. 'quickTips' are simple fixes. 'lockedContent' must provide deep, expert-level advice, with 'detailedTips' explaining the "why," and 'examples' showing concrete, rewritten improvements.
+            5.  **Strict JSON Output:** The entire response must be a single, valid JSON object adhering to the schema below. No extra text or explanations.
+
+            **JSON Schema to Follow:**
+             {
+              "overallScore": "<number - Average score of all sections>",
+              "overallSummary": "<string - A 2-sentence summary of the profile's key strengths and primary area for improvement.>",
+              "topFixes": [
+                {
+                  "id": "<string - e.g., 'fix_headline'>",
+                  "title": "<string - e.g., 'Optimize Your Headline for Search'>",
+                  "hint": "<string - e.g., 'Your headline is crucial for recruiter searches.'>",
+                  "score": "<number - e.g., 10>",
+                  "sectionId": "<string - e.g., 'headline'>"
+                }
+              ],
+              "sections": [
+                {
+                  "id": "profile_picture",
+                  "title": "Profile Picture & Banner",
+                  "score": "<number - 0-100 score>",
+                  "freeFindings": ["<string - e.g., 'Has a professional headshot.'>"],
+                  "quickTips": ["<string - e.g., 'Ensure your banner image reflects your professional interests or industry.'>"],
+                  "lockedContent": {
+                    "detailedTips": ["<string - A professional photo should be high-resolution, with a plain background, where you are looking at the camera and smiling. A custom banner is much better than the default.'>"],
+                    "examples": [{ "before": "<string - A description of a weak photo/banner, e.g., 'Using a distant group photo and default blue banner.'>", "after": "<string - A description of a strong photo/banner, e.g., 'Clear, friendly headshot with a custom banner that includes keywords like "Software Development | React | Cloud Computing".'>" }],
+                    "explanation": "<string - First impressions matter. A professional photo and custom banner make your profile look complete and serious.'>"
+                  }
+                }
+              ]
+            }
+
+            **LinkedIn Profile URL to Analyze:**
+            ---
+            ${profileUrl}
+            ---`;
+            return callGeminiAPI(systemPrompt);
+        };
+
+        // --- ASSETS & ICONS ---
+        const Logo = () => (
+            <svg className="h-8 w-auto text-gray-100" viewBox="0 0 170 50" xmlns="http://www.w3.org/2000/svg">
+                <text x="0" y="36" fontFamily="Inter, system-ui, sans-serif" fontSize="38" fontWeight="bold" fill="currentColor">
+                    Xpert
+                </text>
+                <g transform="translate(118, 0)">
+                    <path d="M 25 2.5 A 22.5 22.5 0 1 1 2.5 25" stroke="#00C853" strokeWidth="3.5" fill="none" strokeLinecap="round" />
+                    <path d="M 25 47.5 A 22.5 22.5 0 1 1 47.5 25" stroke="#64ffda" strokeWidth="3.5" fill="none" strokeLinecap="round" />
+                    <circle cx="2.5" cy="25" r="4.5" fill="#00C853" />
+                    <circle cx="47.5" cy="25" r="4.5" fill="#64ffda" />
+                    <circle cx="25" cy="2.5" r="4.5" fill="white" />
+                </g>
+            </svg>
+        );
+
+        const LockIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 inline-block mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>);
+        const CheckIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>);
+        const ChevronRightIcon = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" className={className || "h-4 w-4 text-gray-500"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>);
+        const ChevronDownIcon = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" className={className || "h-5 w-5"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>);
+
+        // --- CORE UI COMPONENTS ---
+        const Header = () => {
+            const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+            const navItems = [
+                { id: 'home', label: 'Home', href: '/index.html' },
+                { id: 'courses', label: 'Courses', href: '/courses.html' },
+                { id: 'analyzer', label: 'AI Analyzer', href: '/analyzer.html' },
+                { id: 'freelance', label: 'Find Internships', href: '/internships.html' },
+            ];
+            
+            const currentPage = window.location.pathname.split('/').pop().split('.')[0] || 'index';
+            const activePageId = currentPage === 'index' ? 'home' : currentPage;
+
+            return (
+                <header className="bg-black/50 backdrop-blur-md sticky top-0 z-40 border-b border-gray-800">
+                    <nav className="container mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
+                        <a href="/index.html" className="flex items-center cursor-pointer">
+                            <Logo />
+                        </a>
+                        <div className="hidden md:flex items-center space-x-8">
+                            {navItems.map(item => (
+                                <a key={item.id} href={item.href} className={`text-gray-300 hover:text-white transition-colors duration-300 relative group ${activePageId === item.id ? 'font-semibold text-white' : ''}`}>
+                                    {item.label}
+                                    <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-[#00C853] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 ${activePageId === item.id ? 'scale-x-100' : ''}`}></span>
+                                </a>
+                            ))}
+                        </div>
+                        <div className="flex items-center space-x-4">
+                            <button onClick={() => alert('Login functionality placeholder')} className="hidden sm:block px-5 py-2 text-sm font-medium text-gray-200 bg-gray-800 rounded-lg border border-gray-700 hover:bg-gray-700 focus:outline-none transition-all duration-300 hover:scale-105">Login</button>
+                            <div className="md:hidden">
+                                <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="text-gray-300 hover:text-white p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-inset focus:ring-green-500">
+                                    <span className="sr-only">Open main menu</span>
+                                    {isMenuOpen ? (
+                                        <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                    ) : (
+                                        <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </nav>
+                    {isMenuOpen && (
+                        <div className="md:hidden animate-fade-in">
+                            <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                                {navItems.map(item => (
+                                    <a key={item.id} href={item.href} className={`block w-full text-left px-3 py-2 rounded-md text-base font-medium transition-colors ${activePageId === item.id ? 'bg-gray-900 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'}`}>
+                                        {item.label}
+                                    </a>
+                                ))}
+                                 <button onClick={() => alert('Login functionality placeholder')} className="sm:hidden block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white">Login</button>
+                            </div>
+                        </div>
+                    )}
+                </header>
+            );
+        };
+
+        const Footer = () => (
+            <footer className="bg-gray-900 text-white border-t border-gray-800">
+                <div className="container mx-auto px-4 sm:px-6 py-12">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                        <div>
+                            <h3 className="font-bold text-lg mb-4">Xperto</h3>
+                            <p className="text-gray-400 text-sm">Upskilling India's Future Workforce.</p>
+                        </div>
+                        <div>
+                            <h3 className="font-semibold mb-4">Navigate</h3>
+                            <ul className="space-y-2 text-gray-400 text-sm">
+                                <li><a href="/courses.html" className="hover:text-[#00C853]">Courses</a></li>
+                                <li><a href="/analyzer.html" className="hover:text-[#00C853]">AI Analyzer</a></li>
+                                <li><a href="/internships.html" className="hover:text-[#00C853]">Find Internships</a></li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h3 className="font-semibold mb-4">Legal</h3>
+                            <ul className="space-y-2 text-gray-400 text-sm">
+                                <li><a href="#" className="hover:text-[#00C853]">Terms of Service</a></li>
+                                <li><a href="#" className="hover:text-[#00C853]">Privacy Policy</a></li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h3 className="font-semibold mb-4">Connect</h3>
+                            <ul className="space-y-2 text-gray-400 text-sm">
+                                <li><a href="#" className="hover:text-[#00C853]">Twitter</a></li>
+                                <li><a href="#" className="hover:text-[#00C853]">LinkedIn</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div className="mt-12 border-t border-gray-700 pt-8 text-center text-gray-500 text-sm">
+                        <p>&copy; {new Date().getFullYear()} Xperto. All rights reserved.</p>
+                    </div>
+                </div>
+            </footer>
+        );
+
+        const NotificationCenter = ({ notifications }) => (
+            <div className="fixed bottom-5 right-5 z-50 space-y-3">
+                {notifications.map(n => (
+                    <div key={n.id} className={`px-4 py-3 rounded-lg shadow-lg text-white font-semibold animate-slide-in-up ${n.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
+                        {n.message}
+                    </div>
+                ))}
+            </div>
+        );
+
+        const Card = ({ children, className }) => (
+            <div className={`bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden transition-all duration-300 hover:border-[#00C853]/50 hover:shadow-[0_0_20px_rgba(0,200,83,0.3)] ${className}`}>
+                {children}
+            </div>
+        );
+
+        // --- PAGE ---
+        const AnalyzerPage = ({ showNotification }) => {
+            const [analyzerType, setAnalyzerType] = React.useState('resume');
+            
+            // Resume states
+            const [file, setFile] = React.useState(null);
+            const [resumeText, setResumeText] = React.useState('');
+            
+            // LinkedIn states
+            const [url, setUrl] = React.useState('');
+
+            // Shared states
+            const [report, setReport] = React.useState(null);
+            const [isReportUnlocked, setIsReportUnlocked] = React.useState(false);
+            const [loading, setLoading] = React.useState(false);
+            const [activeView, setActiveView] = React.useState({ type: 'top_fixes', id: null });
+            const [openAccordionId, setOpenAccordionId] = React.useState(null);
+
+            const resetState = () => {
+                setFile(null);
+                setResumeText('');
+                setUrl('');
+                setReport(null);
+                setIsReportUnlocked(false);
+                setLoading(false);
+                setActiveView({ type: 'top_fixes', id: null });
+                setOpenAccordionId(null);
+            };
+
+            React.useEffect(() => {
+                resetState();
+            }, [analyzerType]);
+
+
+            const getScoreColor = (score) => {
+                if (score <= 60) return '#ef4444'; // Red
+                if (score <= 90) return '#facc15'; // Yellow
+                return '#4ade80'; // Green
+            };
+            
+            const handleFileChange = async (e) => {
+                const uploadedFile = e.target.files[0];
+                if (!uploadedFile) return;
+
+                setFile(uploadedFile);
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    const typedarray = new Uint8Array(event.target.result);
+                    try {
+                        const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                        let textContent = '';
+                        for (let i = 1; i <= pdf.numPages; i++) {
+                            const page = await pdf.getPage(i);
+                            const text = await page.getTextContent();
+                            textContent += text.items.map(s => s.str).join(' ');
+                        }
+                        setResumeText(textContent);
+                        showNotification('Resume loaded successfully!', 'success');
+                    } catch (error) {
+                        console.error("Error parsing PDF:", error);
+                        showNotification('Could not read the PDF file.', 'error');
+                        setFile(null);
+                    }
+                };
+                reader.readAsArrayBuffer(uploadedFile);
+            };
+
+            const handleAnalyze = async () => {
+                setLoading(true);
+                setReport(null);
+
+                const maxAttempts = 3;
+                let result = null;
+
+                for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                    try {
+                        console.log(`Analysis attempt ${attempt}...`);
+                        if (analyzerType === 'resume') {
+                            if (!resumeText) {
+                                showNotification('Please upload a resume to analyze.', 'error');
+                                setLoading(false);
+                                return;
+                            }
+                            result = await callResumeGeminiAPI(resumeText);
+                        } else {
+                            if (!url.trim()) {
+                                showNotification('Please enter a LinkedIn profile URL.', 'error');
+                                setLoading(false);
+                                return;
+                            }
+                            result = await callLinkedInGeminiAPI(url);
+                        }
+
+                        if (result) {
+                            console.log("Analysis successful!");
+                            break; // Exit loop on success
+                        }
+                    } catch (error) {
+                        console.error(`Attempt ${attempt} failed:`, error);
+                        if (attempt === maxAttempts) {
+                            setLoading(false);
+                            const errorMessage = error.message.toLowerCase();
+                            if (errorMessage.includes("503") || errorMessage.includes("overloaded")) {
+                                showNotification('AI analyzer is busy. Please try again in a moment.', 'error');
+                            } else {
+                                showNotification('Analysis failed after multiple attempts. Please try again.', 'error');
+                            }
+                            return;
+                        }
+                        await new Promise(res => setTimeout(res, 1000));
+                    }
+                }
+                
+                setLoading(false);
+
+                if (result) {
+                    setReport(result);
+                    if (result.topFixes && result.topFixes.length > 0) {
+                        const firstFix = result.topFixes[0];
+                        setActiveView({ type: 'top_fixes', id: firstFix.sectionId });
+                        setOpenAccordionId(firstFix.id);
+                    }
+                    showNotification('Free analysis complete!', 'success');
+                } else if (!result && maxAttempts > 0) {
+                     showNotification('Analysis failed. Please try again.', 'error');
+                }
+            };
+            
+            const ScoreDonut = ({ score }) => {
+                const color = getScoreColor(score);
+                const circumference = 2 * Math.PI * 45;
+                const offset = circumference - (score / 100) * circumference;
+
+                return (
+                    <div className="relative w-32 h-32 sm:w-40 sm:h-40">
+                        <svg className="w-full h-full" viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="45" fill="transparent" stroke="#374151" strokeWidth="10" />
+                            <circle
+                                cx="50" cy="50" r="45"
+                                fill="transparent"
+                                stroke={color}
+                                strokeWidth="10"
+                                strokeDasharray={circumference}
+                                strokeDashoffset={offset}
+                                strokeLinecap="round"
+                                transform="rotate(-90 50 50)"
+                                style={{ transition: 'stroke-dashoffset 0.5s ease-in-out' }}
+                            />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-3xl sm:text-4xl font-bold" style={{ color }}>{score}</span>
+                        </div>
+                    </div>
+                );
+            };
+
+            const BadgeScore = ({ score }) => {
+                const color = getScoreColor(score * 10);
+                return <div className="w-8 h-8 flex items-center justify-center rounded-md font-bold text-lg text-white flex-shrink-0" style={{backgroundColor: color}}>{score}</div>
+            };
+            
+            const LockedContent = ({ onUnlock }) => (
+                 <div className="mt-8 relative">
+                    <div className="blur-sm pointer-events-none space-y-6 opacity-60">
+                         <div>
+                            <h3 className="text-lg font-semibold text-gray-200">Detailed Improvements</h3>
+                            <p className="mt-2 text-sm text-gray-400 bg-gray-800/50 p-3 rounded-md">Unlock to see detailed, AI-powered suggestions and examples.</p>
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-200">Rewritten Examples (Before/After)</h3>
+                             <div className="mt-2 p-4 border border-gray-700 rounded-lg">
+                                <p className="text-xs text-red-400 font-semibold">Before: "Worked on a website."</p>
+                                <p className="text-xs text-green-400 font-semibold mt-2">After: "Developed a portfolio website using React, improving load time by 40%."</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="absolute inset-0 bg-gray-900/80 flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-700 p-4 text-center">
+                        <button onClick={onUnlock} className="px-6 py-3 font-semibold text-black bg-[#00C853] rounded-lg hover:bg-green-400 transition-colors flex items-center shadow-lg shadow-green-500/20">
+                            <LockIcon /> Unlock Full Report for ₹49
+                        </button>
+                    </div>
+                </div>
+            );
+
+             const AccordionContent = ({ section, isReportUnlocked, onUnlock, topFix }) => {
+                if (!section) return null;
+                return (
+                    <div className="lg:hidden p-4 bg-gray-800/50 animate-fade-in border-t border-gray-700">
+                        {topFix ? (
+                            <div className="mb-4">
+                                <h2 className="text-lg font-bold text-white mb-1 break-words">Top Fix: <span className="text-[#00C853]">{topFix.title}</span></h2>
+                                <p className="text-gray-400 text-sm break-words">{topFix.hint}</p>
+                            </div>
+                        ) : (
+                            <h2 className="text-lg font-bold text-white mb-4 break-words">{section.title}</h2>
+                        )}
+                        
+                        <div className="border-t border-gray-700 pt-4">
+                            <h3 className="text-md font-semibold text-white">Key Findings</h3>
+                            <ul className="mt-2 space-y-1.5">
+                                {(section.freeFindings || []).map((finding, i) => <li key={i} className="flex items-start text-sm text-gray-300"><CheckIcon /><span className="min-w-0 break-words">{finding}</span></li>)}
+                            </ul>
+                        </div>
+                        
+                        <div className="mt-4">
+                            <h3 className="text-md font-semibold text-white">Free Quick Fixes</h3>
+                            <ul className="mt-2 space-y-1.5">
+                                {(section.quickTips || []).map((tip, i) => <li key={i} className="flex items-start text-sm text-gray-300"><CheckIcon /><span className="min-w-0 break-words">{tip}</span></li>)}
+                            </ul>
+                        </div>
+
+                        {isReportUnlocked && section.lockedContent ? (
+                            <div className="mt-6 space-y-6">
+                                <div>
+                                    <h3 className="text-md font-bold text-green-400">Detailed Improvements</h3>
+                                    <ul className="mt-2 list-disc list-inside text-gray-300 text-sm space-y-1.5 break-words">
+                                        {section.lockedContent.detailedTips.map((tip, i) => <li key={i}>{tip}</li>)}
+                                    </ul>
+                                </div>
+                                <div>
+                                    <h3 className="text-md font-bold text-green-400">Rewritten Examples</h3>
+                                    <div className="mt-2 space-y-3">
+                                        {section.lockedContent.examples.map((ex, i) => (
+                                            <div key={i} className="p-3 border border-gray-700 rounded-lg">
+                                                <p className="text-xs font-semibold text-red-400">Before:</p>
+                                                <p className="text-xs text-gray-400 italic pl-3 border-l-2 border-red-500/50 ml-1 py-1 break-words">"{ex.before}"</p>
+                                                <p className="text-xs text-semibold text-green-400 mt-2">After:</p>
+                                                <p className="text-xs text-gray-200 pl-3 border-l-2 border-green-500/50 ml-1 py-1 whitespace-pre-wrap break-words">{ex.after}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <h3 className="text-md font-bold text-green-400">Why It Matters</h3>
+                                    <p className="mt-2 text-sm text-gray-300 break-words">{section.lockedContent.explanation}</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <LockedContent onUnlock={onUnlock} />
+                        )}
+                    </div>
+                );
+            };
+
+            const MainContentPane = ({ report, activeView, isReportUnlocked, onUnlock }) => {
+                if (!activeView.id || !report) return <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 sm:p-8 text-center"><p className="text-gray-400">Select an item from the sidebar to see details.</p></div>;
+
+                const section = report.sections.find(s => s.id === activeView.id);
+                if (!section) return null;
+
+                const topFixForSection = report.topFixes.find(f => f.sectionId === section.id);
+
+                return (
+                    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 sm:p-8">
+                        {activeView.type === 'top_fixes' && topFixForSection ? (
+                            <>
+                                <h2 className="text-xl md:text-2xl font-bold text-white mb-1 break-words">Top Fix: <span className="text-[#00C853]">{topFixForSection.title}</span></h2>
+                                <p className="text-gray-400 mb-6 break-words">This is one of the highest-impact changes you can make to the <span className="font-semibold text-gray-300">{section.title}</span> section.</p>
+                                
+                                <div className="border-t border-gray-700 pt-6">
+                                     <h3 className="text-lg font-semibold text-white">Key Findings</h3>
+                                      <ul className="mt-3 space-y-2">
+                                          {(section.freeFindings || []).map((finding, i) => <li key={i} className="flex items-start text-gray-300"><CheckIcon /><span className="min-w-0 break-words">{finding}</span></li>)}
+                                      </ul>
+                                </div>
+                                
+                                <div className="mt-6">
+                                    <h3 className="text-lg font-semibold text-white">Free Quick Fixes</h3>
+                                    <ul className="mt-3 space-y-2">
+                                        {(section.quickTips || []).map((tip, i) => <li key={i} className="flex items-start text-gray-300"><CheckIcon /><span className="min-w-0 break-words">{tip}</span></li>)}
+                                    </ul>
+                                </div>
+
+                                {isReportUnlocked && section.lockedContent ? (
+                                    <div className="mt-8 space-y-8 animate-fade-in">
+                                        <div>
+                                            <h3 className="text-lg md:text-xl font-bold text-green-400">Detailed Improvements</h3>
+                                            <ul className="mt-3 list-disc list-inside text-gray-300 space-y-2 break-words">
+                                                {section.lockedContent.detailedTips.map((tip, i) => <li key={i}>{tip}</li>)}
+                                            </ul>
+                                        </div>
+                                         <div>
+                                            <h3 className="text-lg md:text-xl font-bold text-green-400">Rewritten Examples</h3>
+                                            <div className="mt-3 space-y-4">
+                                            {section.lockedContent.examples.map((ex, i) => (
+                                                <div key={i} className="p-4 border border-gray-700 rounded-lg">
+                                                    <p className="text-sm font-semibold text-red-400">Before:</p>
+                                                    <p className="text-sm text-gray-400 italic pl-4 border-l-2 border-red-500/50 ml-2 py-1 break-words">"{ex.before}"</p>
+                                                    <p className="text-sm font-semibold text-green-400 mt-3">After:</p>
+                                                    <p className="text-sm text-gray-200 pl-4 border-l-2 border-green-500/50 ml-2 py-1 whitespace-pre-wrap break-words">{ex.after}</p>
+                                                </div>
+                                            ))}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg md:text-xl font-bold text-green-400">Why It Matters</h3>
+                                            <p className="mt-2 text-gray-300 break-words">{section.lockedContent.explanation}</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <LockedContent onUnlock={onUnlock} />
+                                )}
+                            </>
+                        ) : (
+                             <>
+                                <div className={`p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between bg-gray-800 gap-4 sm:gap-2`}>
+                                    <h2 className="flex-grow text-xl md:text-2xl font-bold text-white text-center sm:text-left break-words min-w-0">{section.title}</h2>
+                                    <div className={`flex items-center justify-center rounded-full bg-gray-900 font-bold w-14 h-14 text-2xl border-2 flex-shrink-0`} style={{borderColor: getScoreColor(section.score), color: getScoreColor(section.score)}}>
+                                        {section.score}
+                                    </div>
+                                </div>
+                                <div className="mt-6 border-b border-gray-700 pb-6">
+                                    <h3 className="text-lg font-semibold text-white">Free Findings</h3>
+                                    <ul className="mt-3 space-y-2">
+                                        {(section.freeFindings || []).map((finding, i) => <li key={i} className="flex items-start text-gray-300"><CheckIcon /><span className="min-w-0 break-words">{finding}</span></li>)}
+                                    </ul>
+                                </div>
+                                 <div className="mt-6">
+                                    <h3 className="text-lg font-semibold text-white">Free Quick Fixes</h3>
+                                    <ul className="mt-3 space-y-2">
+                                        {(section.quickTips || []).map((tip, i) => <li key={i} className="flex items-start text-gray-300"><CheckIcon /><span className="min-w-0 break-words">{tip}</span></li>)}
+                                    </ul>
+                                </div>
+                                
+                                {isReportUnlocked && section.lockedContent ? (
+                                    <div className="mt-8 space-y-8 animate-fade-in">
+                                        <div>
+                                            <h3 className="text-lg md:text-xl font-bold text-green-400">Detailed Improvements</h3>
+                                            <ul className="mt-3 list-disc list-inside text-gray-300 space-y-2 break-words">
+                                                {section.lockedContent.detailedTips.map((tip, i) => <li key={i}>{tip}</li>)}
+                                            </ul>
+                                        </div>
+                                         <div>
+                                            <h3 className="text-lg md:text-xl font-bold text-green-400">Rewritten Examples</h3>
+                                            <div className="mt-3 space-y-4">
+                                            {section.lockedContent.examples.map((ex, i) => (
+                                                <div key={i} className="p-4 border border-gray-700 rounded-lg">
+                                                    <p className="text-sm font-semibold text-red-400">Before:</p>
+                                                    <p className="text-sm text-gray-400 italic pl-4 border-l-2 border-red-500/50 ml-2 py-1 break-words">"{ex.before}"</p>
+                                                    <p className="text-sm font-semibold text-green-400 mt-3">After:</p>
+                                                    <p className="text-sm text-gray-200 pl-4 border-l-2 border-green-500/50 ml-2 py-1 whitespace-pre-wrap break-words">{ex.after}</p>
+                                                </div>
+                                            ))}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg md:text-xl font-bold text-green-400">Why It Matters</h3>
+                                            <p className="mt-2 text-gray-300 break-words">{section.lockedContent.explanation}</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <LockedContent onUnlock={onUnlock} />
+                                )}
+                             </>
+                        )}
+                    </div>
+                );
+            };
+
+            const AnalyzerInput = () => (
+                <>
+                    <div className="max-w-3xl mx-auto text-center">
+                        <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white">AI Profile Analyzer</h1>
+                        <p className="mt-4 text-gray-400">Get an instant analysis of your Resume or LinkedIn profile to identify weaknesses and outshine the competition.</p>
+                    </div>
+
+                    <div className="max-w-2xl mx-auto mt-12">
+                        <div className="flex justify-center p-1 bg-gray-800 rounded-lg mb-6">
+                            <button onClick={() => setAnalyzerType('resume')} className={`w-1/2 py-2.5 text-sm font-semibold rounded-md transition-colors ${analyzerType === 'resume' ? 'bg-[#00C853] text-black' : 'text-gray-400 hover:text-white'}`}>
+                                Resume Analyzer
+                            </button>
+                            <button onClick={() => setAnalyzerType('linkedin')} className={`w-1/2 py-2.5 text-sm font-semibold rounded-md transition-colors ${analyzerType === 'linkedin' ? 'bg-[#00C853] text-black' : 'text-gray-400 hover:text-white'}`}>
+                                LinkedIn Analyzer
+                            </button>
+                        </div>
+
+                        {analyzerType === 'resume' ? (
+                            <Card className="p-6 sm:p-8 hover:border-[#00C853]/50 transition-colors">
+                                <div className="flex justify-center">
+                                    <label htmlFor="resume-upload" className="cursor-pointer text-center p-8 border-2 border-dashed border-gray-600 rounded-xl hover:border-green-500 hover:bg-gray-800/50 transition-colors w-full">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                                        <p className="mt-2 font-semibold text-white">Click to Upload your Resume</p>
+                                        <p className="text-xs text-gray-500">PDF up to 5MB</p>
+                                    </label>
+                                    <input id="resume-upload" type="file" accept=".pdf" onChange={handleFileChange} className="hidden"/>
+                                </div>
+                                {file && <p className="mt-4 text-sm text-center text-gray-400">Selected: <span className="font-semibold text-gray-200">{file.name}</span></p>}
+                                <button onClick={handleAnalyze} disabled={loading || !file} className="mt-6 w-full py-3 font-semibold text-black bg-[#00C853] rounded-lg hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed transition-transform duration-200 disabled:transform-none hover:scale-105">
+                                    {loading ? 'Analyzing...' : 'Grade My Resume'}
+                                </button>
+                            </Card>
+                        ) : (
+                            <Card className="p-6 sm:p-8 hover:border-[#00C853]/50 transition-colors">
+                                <div className="space-y-4">
+                                    <input type="text" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Paste your LinkedIn Profile URL here" className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-[#00C853] focus:outline-none"/>
+                                    <button onClick={handleAnalyze} disabled={loading || !url} className="w-full py-3 font-semibold text-black bg-[#00C853] rounded-lg hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed transition-transform duration-200 disabled:transform-none hover:scale-105">
+                                        {loading ? 'Analyzing...' : 'Analyze My LinkedIn'}
+                                    </button>
+                                </div>
+                            </Card>
+                        )}
+                    </div>
+                </>
+            );
+
+            return (
+                <div className="container mx-auto px-4 sm:px-6 py-12 md:py-16 animate-fade-in min-h-screen">
+                    {!report ? (
+                        <AnalyzerInput />
+                    ) : (
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-8 animate-slide-in-up">
+                            <aside className="lg:col-span-4 xl:col-span-3">
+                                <div className="p-4 rounded-xl bg-gray-900 border border-gray-800 lg:sticky lg:top-24">
+                                    <div className="flex flex-col items-center">
+                                        <ScoreDonut score={report.overallScore} />
+                                        <p className="mt-3 text-center text-sm text-gray-400 break-words">{report.overallSummary}</p>
+                                    </div>
+                                    
+                                    <h3 className="font-semibold text-gray-200 mt-6 mb-3">Top Fixes</h3>
+                                    <div className="space-y-2">
+                                        {(report.topFixes || []).map(fix => {
+                                            const section = report.sections.find(s => s.id === fix.sectionId);
+                                            const isAccordionOpen = openAccordionId === fix.id;
+                                            return (
+                                                <div key={fix.id} className={`rounded-lg overflow-hidden transition-colors duration-200 ${isAccordionOpen ? 'bg-gray-800' : 'bg-transparent'}`}>
+                                                    <button onClick={() => {
+                                                                setActiveView({ type: 'top_fixes', id: fix.sectionId });
+                                                                setOpenAccordionId(isAccordionOpen ? null : fix.id);
+                                                            }}
+                                                        className={`w-full text-left p-3 flex items-center border-2 transition-colors ${activeView.type === 'top_fixes' && activeView.id === fix.sectionId ? `border-green-500 lg:bg-gray-800` : 'border-transparent'} ${isAccordionOpen ? 'lg:bg-transparent' : ''} hover:bg-gray-800/50`}>
+                                                        <BadgeScore score={fix.score} />
+                                                        <div className="ml-3 flex-grow overflow-hidden min-w-0">
+                                                            <p className="font-semibold text-gray-100 truncate">{fix.title}</p>
+                                                            <p className="text-xs text-gray-400 truncate">{fix.hint}</p>
+                                                        </div>
+                                                        <ChevronRightIcon className="h-4 w-4 text-gray-500 hidden lg:block" />
+                                                        <ChevronDownIcon className={`w-5 h-5 text-gray-400 transition-transform duration-300 lg:hidden ${isAccordionOpen ? 'transform rotate-180' : ''}`} />
+                                                    </button>
+                                                    {isAccordionOpen && section && (
+                                                        <AccordionContent 
+                                                            section={section} 
+                                                            isReportUnlocked={isReportUnlocked} 
+                                                            onUnlock={() => setIsReportUnlocked(true)}
+                                                            topFix={fix}
+                                                        />
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    
+                                    <div className="border-t border-gray-700 my-4"></div>
+                                    
+                                    <h3 className="font-semibold text-gray-200 mb-3">Detailed Report</h3>
+                                    <div className="space-y-2">
+                                        {(report.sections || []).map(section => {
+                                            const isAccordionOpen = openAccordionId === section.id;
+                                            return (
+                                                <div key={section.id} className={`rounded-lg overflow-hidden transition-colors duration-200 ${isAccordionOpen ? 'bg-gray-800' : 'bg-transparent'}`}>
+                                                    <button onClick={() => {
+                                                                setActiveView({ type: 'section', id: section.id });
+                                                                setOpenAccordionId(isAccordionOpen ? null : section.id);
+                                                            }}
+                                                        className={`w-full text-left p-3 flex items-center border-2 transition-colors ${activeView.type === 'section' && activeView.id === section.id ? `border-green-500 lg:bg-gray-800` : 'border-transparent'} ${isAccordionOpen ? 'lg:bg-transparent' : ''} hover:bg-gray-800/50`}>
+                                                        <p className="font-semibold text-gray-100 flex-grow">{section.title}</p>
+                                                        <div className={`font-bold text-lg mr-3`} style={{color: getScoreColor(section.score)}}>{section.score}</div>
+                                                        <ChevronDownIcon className={`w-5 h-5 text-gray-400 transition-transform duration-300 lg:hidden ${isAccordionOpen ? 'transform rotate-180' : ''}`} />
+                                                    </button>
+                                                     {isAccordionOpen && (
+                                                        <AccordionContent 
+                                                            section={section} 
+                                                            isReportUnlocked={isReportUnlocked} 
+                                                            onUnlock={() => setIsReportUnlocked(true)}
+                                                        />
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </aside>
+
+                            <main className="hidden lg:block lg:col-span-8 xl:col-span-9">
+                                <MainContentPane report={report} activeView={activeView} isReportUnlocked={isReportUnlocked} onUnlock={() => setIsReportUnlocked(true)} />
+                            </main>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+        
+        // --- Main App Component ---
+        const CustomCursor = () => {
+            const cursorRef = React.useRef(null);
+            React.useEffect(() => {
+                if (cursorRef.current) {
+                    const moveCursor = (e) => {
+                        cursorRef.current.style.left = `${e.clientX}px`;
+                        cursorRef.current.style.top = `${e.clientY}px`;
+                    };
+                    window.addEventListener('mousemove', moveCursor);
+                    return () => window.removeEventListener('mousemove', moveCursor);
+                }
+            }, []);
+            return <div ref={cursorRef} className="custom-cursor hidden md:block"></div>
+        }
+
+        function App() {
+            const [notifications, setNotifications] = React.useState([]);
+
+            const showNotification = (message, type = 'success') => {
+                const id = Date.now();
+                setNotifications(prev => [...prev, { id, message, type }]);
+                setTimeout(() => {
+                    setNotifications(prev => prev.filter(n => n.id !== id));
+                }, 3000);
+            };
+            
+            return (
+                <div className="bg-black font-sans text-gray-300">
+                    <CustomCursor />
+                    <Header />
+                    <main><AnalyzerPage showNotification={showNotification} /></main>
+                    <Footer />
+                    <NotificationCenter notifications={notifications} />
+                </div>
+            );
+        }
+
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
+        root.render(<App />);
+    </script>
+</body>
+</html>
