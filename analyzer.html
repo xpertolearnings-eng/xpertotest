@@ -67,6 +67,41 @@
 
     <script type="text/babel">
         // --- GEMINI API CALL HELPERS ---
+        
+        // **FIX**: A robust JSON parser and repairer. This will catch common AI formatting
+        // errors (like trailing commas) that cause the application to crash.
+        const parseAndRepairJSON = (text) => {
+            try {
+                // Happy path: the JSON is already valid.
+                return JSON.parse(text);
+            } catch (e) {
+                console.warn("Initial JSON.parse failed. Attempting to repair.", e);
+            }
+
+            // If parsing fails, find the start and end of the JSON object to clean it.
+            let repairedText = text.trim();
+            const firstBracket = repairedText.indexOf('{');
+            const lastBracket = repairedText.lastIndexOf('}');
+
+            if (firstBracket === -1 || lastBracket === -1 || lastBracket < firstBracket) {
+                throw new Error("Could not find a valid JSON object in the AI's response.");
+            }
+
+            repairedText = repairedText.substring(firstBracket, lastBracket + 1);
+
+            // Perform final, aggressive repairs on the extracted object.
+            try {
+                // This regex finds and removes trailing commas in objects and arrays,
+                // which is the most common cause of this specific JSON error.
+                const fixedJsonString = repairedText.replace(/,\s*([}\]])/g, "$1");
+                return JSON.parse(fixedJsonString);
+            } catch (e) {
+                 console.error("Failed to parse JSON even after multiple repair attempts.", e);
+                 console.error("Problematic string after repairs:", repairedText);
+                 throw new Error("The AI's response was malformed and could not be repaired.");
+            }
+        };
+
         const callGeminiAPI = async (systemPrompt) => {
             try {
                 const url = window.location.origin + '/.netlify/functions/call-gemini';
@@ -76,12 +111,18 @@
                     body: JSON.stringify({ prompt: systemPrompt }),
                 });
 
+                // **FIX**: Get the response as raw text first, so our repair function can clean it.
+                const rawText = await response.text();
+
                 if (!response.ok) {
-                    const errorBody = await response.json();
-                    throw new Error(`Network response was not ok: ${response.status}. ${errorBody.details || 'Server error'}`);
+                    let errorDetails = rawText;
+                    try { errorDetails = JSON.parse(rawText).details || rawText; } 
+                    catch (e) { /* Ignore if error response isn't JSON */ }
+                    throw new Error(`Network response was not ok: ${response.status}. ${errorDetails}`);
                 }
                 
-                const report = await response.json();
+                // Use the new, robust repair function instead of the standard JSON.parse.
+                const report = parseAndRepairJSON(rawText);
                 console.log("Received and parsed report from Netlify function:", report);
                 return report;
             } catch (error) {
@@ -100,7 +141,6 @@
                 .replace(/\r\n|\r|\n/g, '\\n'); // Consolidate and escape newlines
         };
 
-        // **FIX**: This function now only requests the initial, free part of the report.
         const callResumeGeminiAPI = (resumeText) => {
             console.log("Calling Netlify for initial FREE analysis...");
             const sanitizedResumeText = sanitizeTextForAI(resumeText);
@@ -142,7 +182,6 @@
             return callGeminiAPI(systemPrompt);
         };
         
-        // **FIX**: A new, separate function to fetch only the detailed 'locked' content on demand.
         const callLockedContentGeminiAPI = (resumeText) => {
             console.log("Calling Netlify for DETAILED (locked) content...");
             const sanitizedResumeText = sanitizeTextForAI(resumeText);
@@ -396,7 +435,6 @@
                 }
             };
             
-            // **FIX**: The unlock handler now triggers the second API call for detailed content.
             const handleUnlock = async () => {
                 setUnlocking(true);
                 try {
