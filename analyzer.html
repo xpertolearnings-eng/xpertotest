@@ -68,8 +68,8 @@
     <script type="text/babel">
         // --- GEMINI API CALL HELPERS ---
         
-        // **FIX**: A robust JSON parser and repairer. This will catch common AI formatting
-        // errors (like trailing commas) that cause the application to crash.
+        // **FIX**: A more advanced JSON parser and repairer. This function now specifically
+        // targets and fixes "bad control characters" which are a common cause of JSON errors.
         const parseAndRepairJSON = (text) => {
             try {
                 // Happy path: the JSON is already valid.
@@ -91,9 +91,22 @@
 
             // Perform final, aggressive repairs on the extracted object.
             try {
-                // This regex finds and removes trailing commas in objects and arrays,
-                // which is the most common cause of this specific JSON error.
-                const fixedJsonString = repairedText.replace(/,\s*([}\]])/g, "$1");
+                // Step 1: Replace illegal control characters with their escaped versions or remove them.
+                // This is the key fix for the "Bad control character" error.
+                let fixedJsonString = repairedText.replace(/[\u0000-\u001F]/g, (char) => {
+                    switch (char) {
+                        case '\b': return '\\b';
+                        case '\f': return '\\f';
+                        case '\n': return '\\n';
+                        case '\r': return '\\r';
+                        case '\t': return '\\t';
+                        default: return ''; // Remove other non-essential control characters
+                    }
+                });
+
+                // Step 2: Fix trailing commas in objects and arrays.
+                fixedJsonString = fixedJsonString.replace(/,\s*([}\]])/g, "$1");
+                
                 return JSON.parse(fixedJsonString);
             } catch (e) {
                  console.error("Failed to parse JSON even after multiple repair attempts.", e);
@@ -111,7 +124,6 @@
                     body: JSON.stringify({ prompt: systemPrompt }),
                 });
 
-                // **FIX**: Get the response as raw text first, so our repair function can clean it.
                 const rawText = await response.text();
 
                 if (!response.ok) {
@@ -121,7 +133,6 @@
                     throw new Error(`Network response was not ok: ${response.status}. ${errorDetails}`);
                 }
                 
-                // Use the new, robust repair function instead of the standard JSON.parse.
                 const report = parseAndRepairJSON(rawText);
                 console.log("Received and parsed report from Netlify function:", report);
                 return report;
