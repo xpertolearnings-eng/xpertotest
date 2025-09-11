@@ -67,39 +67,6 @@
 
     <script type="text/babel">
         // --- GEMINI API CALL HELPERS ---
-
-        // This function attempts to parse the AI's response as JSON.
-        const parseGeminiResponse = (text) => {
-            try {
-                return JSON.parse(text);
-            } catch (e) {
-                console.warn("Initial JSON.parse failed. Attempting to repair.", e);
-            }
-
-            let repairedText = text.trim();
-            const firstBracket = repairedText.indexOf('{');
-            const lastBracket = repairedText.lastIndexOf('}');
-
-            if (firstBracket === -1 || lastBracket === -1 || lastBracket < firstBracket) {
-                throw new Error("Could not find a valid JSON object in the AI's response.");
-            }
-
-            repairedText = repairedText.substring(firstBracket, lastBracket + 1);
-
-            try {
-                // **FIX**: Add a more robust repair step. This regex finds and removes
-                // trailing commas in arrays and objects (e.g., [1, 2,]) which is a
-                // common AI error and the likely cause of the parsing failures.
-                const repairedJsonString = repairedText.replace(/,\s*([}\]])/g, "$1");
-                return JSON.parse(repairedJsonString);
-            } catch (e) {
-                 console.error("Failed to parse JSON even after repairing.", e);
-                 console.error("Problematic string:", repairedText);
-                 throw new Error("The AI's response could not be repaired into valid JSON.");
-            }
-        };
-        
-        // This is the generic function to call our Netlify serverless function.
         const callGeminiAPI = async (systemPrompt) => {
             try {
                 const url = window.location.origin + '/.netlify/functions/call-gemini';
@@ -109,17 +76,13 @@
                     body: JSON.stringify({ prompt: systemPrompt }),
                 });
 
-                const responseText = await response.text();
-
                 if (!response.ok) {
-                    let errorDetails = responseText;
-                    try { errorDetails = JSON.parse(responseText).details || responseText; } 
-                    catch (e) { /* Ignore if error response is not JSON */ }
-                    throw new Error(`Network response was not ok: ${response.status}. ${errorDetails}`);
+                    const errorBody = await response.json();
+                    throw new Error(`Network response was not ok: ${response.status}. ${errorBody.details || 'Server error'}`);
                 }
                 
-                const report = parseGeminiResponse(responseText);
-                console.log("Received and parsed detailed report from Netlify function:", report);
+                const report = await response.json();
+                console.log("Received and parsed report from Netlify function:", report);
                 return report;
             } catch (error) {
                 console.error("Failed to fetch analysis from Netlify function:", error);
@@ -127,29 +90,30 @@
             }
         };
         
-        // This function creates the specific, hyper-personalized prompt for RESUME analysis.
-        const callResumeGeminiAPI = (resumeText) => {
-            console.log("Calling Netlify Function for RESUME analysis with hyper-personalized prompt...");
-            
-            const sanitizedResumeText = resumeText
+        const sanitizeTextForAI = (text) => {
+             return text
                 .replace(/’/g, "'") // Replace smart single quotes
                 .replace(/“|”/g, '"') // Replace smart double quotes
                 .replace(/[\u200B-\u200D\uFEFF]/g, '') // Remove zero-width spaces
                 .replace(/\\/g, '\\\\')  // Escape backslashes
                 .replace(/"/g, '\\"')   // Escape double quotes
                 .replace(/\r\n|\r|\n/g, '\\n'); // Consolidate and escape newlines
+        };
 
+        // **FIX**: This function now only requests the initial, free part of the report.
+        const callResumeGeminiAPI = (resumeText) => {
+            console.log("Calling Netlify for initial FREE analysis...");
+            const sanitizedResumeText = sanitizeTextForAI(resumeText);
             const systemPrompt = `
             You are 'Xperto AI', a world-class resume analyzer. Your output MUST be a single, valid JSON object with no extra text or markdown.
 
             **Core Directives:**
-            1.  **Hyper-Personalization & Depth:** Find 5 specific weak sentences/points in the resume and use them as direct quotes for the "before" field. Explain the 'why' behind each suggestion (ATS impact, recruiter psychology).
-            2.  **Freemium Structure:**
-                * **Top 5 Fixes (Unlocked):** Generate the 5 most critical improvements. Each must have a clear problem, a detailed solution, and a concrete 'before'/'after' example.
-                * **Detailed Report (Locked):** Generate a 5-section analysis with expert-level insights and multiple examples.
-            3.  **Content-Specific:** If a section (e.g., Projects) is missing, its score MUST be low and it should be mentioned.
-            4.  **Realistic Scoring:** Scores (0-100) are based on content quality (action verbs, quantifiable results). 'overallScore' is the average of the 5 section scores.
-            5.  **CRITICAL OUTPUT FORMAT:** The entire response must be a single, valid JSON object. All string values inside the JSON must be properly escaped. Newlines must be represented as '\\n'.
+            1.  **Generate FREE Content Only:** Create only the initial analysis. This includes the overall score, summary, top 5 fixes, and the basic structure for the 5 sections (id, title, score, freeFindings, quickTips).
+            2.  **DO NOT Generate Locked Content:** The 'lockedContent' field in the sections array must be an empty object: {}.
+            3.  **Hyper-Personalization:** Find 5 specific weak sentences/points in the resume to use as direct quotes for the "before" field in the 'topFixes'.
+            4.  **Realistic Scoring:** Scores (0-100) are based on content quality. 'overallScore' is the average of the 5 section scores.
+            5.  **CRITICAL OUTPUT FORMAT:** The entire response must be a single, valid JSON object.
+            6.  **Brevity Mandate:** Keep all text concise.
 
             **JSON Schema to Follow:**
             {
@@ -163,11 +127,11 @@
                 }
               ],
               "sections": [
-                { "id": "summary", "title": "Professional Summary", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }},
-                { "id": "experience", "title": "Work Experience", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }},
-                { "id": "projects", "title": "Projects", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }},
-                { "id": "skills", "title": "Skills Section", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }},
-                { "id": "education", "title": "Education", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }}
+                { "id": "summary", "title": "Professional Summary", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": {}},
+                { "id": "experience", "title": "Work Experience", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": {}},
+                { "id": "projects", "title": "Projects", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": {}},
+                { "id": "skills", "title": "Skills Section", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": {}},
+                { "id": "education", "title": "Education", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": {}}
               ]
             }
 
@@ -178,48 +142,52 @@
             return callGeminiAPI(systemPrompt);
         };
         
-        // This function creates the specific prompt for LINKEDIN PROFILE URL analysis.
-        const callLinkedInUrlGeminiAPI = (profileUrl) => {
-            console.log("Calling Netlify Function for LINKEDIN URL analysis...");
+        // **FIX**: A new, separate function to fetch only the detailed 'locked' content on demand.
+        const callLockedContentGeminiAPI = (resumeText) => {
+            console.log("Calling Netlify for DETAILED (locked) content...");
+            const sanitizedResumeText = sanitizeTextForAI(resumeText);
             const systemPrompt = `
-            You are 'Xperto AI', a LinkedIn profile optimizer. Your output MUST be a single, valid JSON object. Do not access external URLs; simulate the analysis based on best practices.
+            You are 'Xperto AI', a resume analyzer. Based on the provided resume, generate ONLY the detailed 'lockedContent' for each of the 5 sections.
 
             **Core Directives:**
-            1.  **Simulate In-Depth Analysis:** For "before" examples, create plausible weak examples (e.g., headline: "Student"). The "after" examples and explanations must be expert quality.
-            2.  **Freemium Structure:**
-                * **Top 5 Fixes (Unlocked):** Generate the 5 most critical improvements for a typical LinkedIn profile.
-                * **Detailed Report (Locked):** Generate a 5-section analysis for paying users.
-            3.  **Realistic Scoring:** Scores (0-100) are based on best practices (keyword optimization, networking appeal). 'overallScore' is the average of the 5 section scores.
-            4.  **CRITICAL OUTPUT FORMAT:** The entire response must be a single, valid JSON object. All string values inside the JSON must be properly escaped. Newlines must be represented as '\\n'.
+            1.  **Generate LOCKED Content Only:** Your entire output must be a single JSON object with one key: "detailedSections". This key holds an array of 5 objects.
+            2.  **Object Structure:** Each object in the array must have two keys: the section 'id' and the 'lockedContent' object.
+            3.  **CRITICAL OUTPUT FORMAT:** Adhere strictly to the JSON schema. No extra text or markdown.
+            4.  **Brevity Mandate:** Keep explanations concise to avoid truncation.
 
             **JSON Schema to Follow:**
             {
-              "overallScore": "<number>",
-              "overallSummary": "<string>",
-              "topFixes": [
-                {
-                  "id": "<string>", "title": "<string>", "problem": "<string>",
-                  "solution": { "explanation": "<string>", "before": "<string>", "after": "<string>" },
-                  "sectionId": "<string>"
+              "detailedSections": [
+                { 
+                  "id": "summary", 
+                  "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }
+                },
+                { 
+                  "id": "experience", 
+                  "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }
+                },
+                { 
+                  "id": "projects", 
+                  "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }
+                },
+                { 
+                  "id": "skills", 
+                  "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }
+                },
+                { 
+                  "id": "education", 
+                  "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }
                 }
-              ],
-              "sections": [
-                { "id": "headline_summary", "title": "Headline & Summary", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }},
-                { "id": "experience", "title": "Experience Section", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }},
-                { "id": "skills", "title": "Skills & Endorsements", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": { "detailedTips": ["<string>"], "examples": [{ "before": "<string>", "after": "<string>" }], "explanation": "<string>" }},
-                { "id": "activity", "title": "Profile Activity", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": { "detailedTips": ["<string>"], "examples": [], "explanation": "<string>" }},
-                { "id": "recommendations", "title": "Recommendations", "score": "<number>", "freeFindings": ["<string>"], "quickTips": ["<string>"], "lockedContent": { "detailedTips": ["<string>"], "examples": [], "explanation": "<string>" }}
               ]
             }
 
-            **LinkedIn Profile URL to Analyze:**
+            **Resume Text to Analyze:**
             ---
-            ${profileUrl}
+            ${sanitizedResumeText}
             ---`;
             return callGeminiAPI(systemPrompt);
         };
-
-
+        
         // --- ASSETS & ICONS ---
         const Logo = () => (
             <svg className="h-8 w-auto text-gray-100" viewBox="0 0 170 50" xmlns="http://www.w3.org/2000/svg">
@@ -238,7 +206,6 @@
 
         const LockIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 inline-block mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>);
         const CheckIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>);
-        const ChevronRightIcon = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" className={className || "h-4 w-4 text-gray-500"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>);
         const ChevronDownIcon = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" className={className || "h-5 w-5"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>);
 
         // --- CORE UI COMPONENTS ---
@@ -361,23 +328,19 @@
             const [report, setReport] = React.useState(null);
             const [isReportUnlocked, setIsReportUnlocked] = React.useState(false);
             const [loading, setLoading] = React.useState(false);
+            const [unlocking, setUnlocking] = React.useState(false);
             const [activeView, setActiveView] = React.useState({ type: null, id: null });
             const [openAccordionId, setOpenAccordionId] = React.useState(null);
 
             const resetState = () => {
-                setFile(null);
-                setFileText('');
-                setLinkedinUrl('');
-                setReport(null);
-                setIsReportUnlocked(false);
-                setLoading(false);
+                setFile(null); setFileText(''); setLinkedinUrl('');
+                setReport(null); setIsReportUnlocked(false);
+                setLoading(false); setUnlocking(false);
                 setActiveView({ type: null, id: null });
                 setOpenAccordionId(null);
             };
 
-            React.useEffect(() => {
-                resetState();
-            }, [analyzerType]);
+            React.useEffect(() => { resetState(); }, [analyzerType]);
 
             const getScoreColor = (score) => {
                 if (score < 50) return '#ef4444';
@@ -388,7 +351,6 @@
             const handleFileChange = async (e) => {
                 const uploadedFile = e.target.files[0];
                 if (!uploadedFile) return;
-
                 setFile(uploadedFile);
                 const reader = new FileReader();
                 reader.onload = async (event) => {
@@ -406,109 +368,96 @@
                     } catch (error) {
                         console.error("Error parsing PDF:", error);
                         showNotification('Could not read the PDF file.', 'error');
-                        setFile(null);
-                        setFileText('');
+                        setFile(null); setFileText('');
                     }
                 };
                 reader.readAsArrayBuffer(uploadedFile);
             };
 
             const handleAnalyze = async () => {
-                const isResume = analyzerType === 'resume';
-                if ((isResume && !fileText) || (!isResume && !linkedinUrl)) {
-                    showNotification(isResume ? 'Please upload a resume PDF to analyze.' : 'Please enter a LinkedIn profile URL.', 'error');
+                if ((analyzerType === 'resume' && !fileText) || (analyzerType === 'linkedin' && !linkedinUrl)) {
+                    showNotification(analyzerType === 'resume' ? 'Please upload a resume.' : 'Please enter a LinkedIn URL.', 'error');
                     return;
                 }
-
-                setLoading(true);
-                setReport(null);
-
-                let result = null;
+                setLoading(true); setReport(null);
                 try {
-                    result = isResume
-                        ? await callResumeGeminiAPI(fileText)
-                        : await callLinkedInUrlGeminiAPI(linkedinUrl);
+                    const result = await callResumeGeminiAPI(fileText);
+                    setReport(result);
+                    if (result.topFixes && result.topFixes.length > 0) {
+                        setActiveView({ type: 'top_fixes', id: result.topFixes[0].id });
+                        setOpenAccordionId(result.topFixes[0].id);
+                    }
+                    showNotification('Free analysis complete!', 'success');
                 } catch (error) {
                     console.error("Analysis failed:", error);
                     showNotification(`Analysis failed: ${error.message}`, 'error');
-                }
-                
-                setLoading(false);
-
-                if (result) {
-                    setReport(result);
-                    if (result.topFixes && result.topFixes.length > 0) {
-                        const firstFix = result.topFixes[0];
-                        setActiveView({ type: 'top_fixes', id: firstFix.id });
-                        setOpenAccordionId(firstFix.id);
-                    }
-                    showNotification('Free analysis complete!', 'success');
+                } finally {
+                    setLoading(false);
                 }
             };
             
+            // **FIX**: The unlock handler now triggers the second API call for detailed content.
+            const handleUnlock = async () => {
+                setUnlocking(true);
+                try {
+                    const lockedData = await callLockedContentGeminiAPI(fileText);
+                    setReport(prevReport => {
+                        const newSections = prevReport.sections.map(section => {
+                            const detailedContent = lockedData.detailedSections.find(d => d.id === section.id);
+                            return { ...section, lockedContent: detailedContent ? detailedContent.lockedContent : {} };
+                        });
+                        return { ...prevReport, sections: newSections };
+                    });
+                    setIsReportUnlocked(true);
+                    showNotification('Full Report Unlocked!', 'success');
+                } catch (error) {
+                     showNotification(`Could not unlock report: ${error.message}`, 'error');
+                } finally {
+                    setUnlocking(false);
+                }
+            };
+
             const ScoreDonut = ({ score }) => {
                 const color = getScoreColor(score);
                 const circumference = 2 * Math.PI * 45;
                 const offset = circumference - (score / 100) * circumference;
-
                 return (
                     <div className="relative w-32 h-32 sm:w-40 sm:h-40">
                         <svg className="w-full h-full" viewBox="0 0 100 100">
                             <circle cx="50" cy="50" r="45" fill="transparent" stroke="#374151" strokeWidth="10" />
-                            <circle
-                                cx="50" cy="50" r="45"
-                                fill="transparent"
-                                stroke={color}
-                                strokeWidth="10"
-                                strokeDasharray={circumference}
-                                strokeDashoffset={offset}
-                                strokeLinecap="round"
-                                transform="rotate(-90 50 50)"
-                                style={{ transition: 'stroke-dashoffset 0.5s ease-in-out' }}
-                            />
+                            <circle cx="50" cy="50" r="45" fill="transparent" stroke={color} strokeWidth="10" strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" transform="rotate(-90 50 50)" style={{ transition: 'stroke-dashoffset 0.5s ease-in-out' }} />
                         </svg>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-3xl sm:text-4xl font-bold" style={{ color }}>{score}</span>
-                        </div>
+                        <div className="absolute inset-0 flex items-center justify-center"><span className="text-3xl sm:text-4xl font-bold" style={{ color }}>{score}</span></div>
                     </div>
                 );
             };
             
-            const LockedContent = ({ onUnlock }) => (
+            const LockedContent = ({ onUnlock, unlocking }) => (
                  <div className="mt-8 relative">
                     <div className="blur-sm pointer-events-none space-y-6 opacity-60">
                          <div>
                             <h3 className="text-lg font-semibold text-gray-200">Detailed Improvements</h3>
                             <p className="mt-2 text-sm text-gray-400 bg-gray-800/50 p-3 rounded-md">Unlock to see detailed, AI-powered suggestions and examples.</p>
                         </div>
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-200">Rewritten Examples (Before/After)</h3>
-                             <div className="mt-2 p-4 border border-gray-700 rounded-lg">
-                                <p className="text-xs text-red-400 font-semibold">Before: "Worked on a website."</p>
-                                <p className="text-xs text-green-400 font-semibold mt-2">After: "Developed a portfolio website using React, improving load time by 40%."</p>
-                            </div>
-                        </div>
                     </div>
                     <div className="absolute inset-0 bg-gray-900/80 flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-700 p-4 text-center">
-                        <button onClick={onUnlock} className="px-6 py-3 font-semibold text-black bg-[#00C853] rounded-lg hover:bg-green-400 transition-colors flex items-center shadow-lg shadow-green-500/20">
-                            <LockIcon /> Unlock Full Report for ₹49
+                        <button onClick={onUnlock} disabled={unlocking} className="px-6 py-3 font-semibold text-black bg-[#00C853] rounded-lg hover:bg-green-400 transition-colors flex items-center shadow-lg shadow-green-500/20 disabled:bg-gray-600 disabled:cursor-not-allowed">
+                            <LockIcon /> {unlocking ? 'Unlocking...' : 'Unlock Full Report for ₹49'}
                         </button>
                     </div>
                 </div>
             );
 
-            const MainContentPane = ({ report, activeView, isReportUnlocked, onUnlock }) => {
-                if (!activeView.id || !report) return <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 sm:p-8 text-center hidden lg:block"><p className="text-gray-400">Select an item from the sidebar to see details.</p></div>;
+            const MainContentPane = ({ report, activeView, isReportUnlocked, onUnlock, unlocking }) => {
+                if (!activeView.id || !report) return <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 sm:p-8 text-center hidden lg:block"><p className="text-gray-400">Select an item to see details.</p></div>;
 
                 if (activeView.type === 'top_fixes') {
                     const topFix = report.topFixes.find(f => f.id === activeView.id);
                     if (!topFix) return null;
-                    
                     return (
                         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 sm:p-8">
                             <h2 className="text-xl md:text-2xl font-bold text-white mb-1 break-words">Top Fix: <span className="text-[#00C853]">{topFix.title}</span></h2>
                             <p className="text-gray-400 mb-6 break-words">{topFix.problem}</p>
-                            
                             <div className="border-t border-gray-700 pt-6 space-y-6">
                                 <div>
                                     <h3 className="text-lg md:text-xl font-bold text-green-400">The Solution</h3>
@@ -528,117 +477,48 @@
                 if (activeView.type === 'section') {
                     const section = report.sections.find(s => s.id === activeView.id);
                     if (!section) return null;
-
                     return (
                         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 sm:p-8">
                             <div className="p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between bg-gray-800 gap-4 sm:gap-2">
-                                <h2 className="flex-grow text-xl md:text-2xl font-bold text-white text-center sm:text-left break-words min-w-0">{section.title}</h2>
-                                <div className="flex items-center justify-center rounded-full bg-gray-900 font-bold w-14 h-14 text-2xl border-2 flex-shrink-0" style={{borderColor: getScoreColor(section.score), color: getScoreColor(section.score)}}>
-                                    {section.score}
-                                </div>
+                                <h2 className="flex-grow text-xl md:text-2xl font-bold text-white text-center sm:text-left">{section.title}</h2>
+                                <div className="flex items-center justify-center rounded-full bg-gray-900 font-bold w-14 h-14 text-2xl border-2 flex-shrink-0" style={{borderColor: getScoreColor(section.score), color: getScoreColor(section.score)}}>{section.score}</div>
                             </div>
                             <div className="mt-6 border-b border-gray-700 pb-6">
                                 <h3 className="text-lg font-semibold text-white">Free Findings</h3>
-                                <ul className="mt-3 space-y-2">
-                                    {(section.freeFindings || []).map((finding, i) => <li key={i} className="flex items-start text-gray-300"><CheckIcon /><span className="min-w-0 break-words">{finding}</span></li>)}
-                                </ul>
+                                <ul className="mt-3 space-y-2">{(section.freeFindings || []).map((finding, i) => <li key={i} className="flex items-start text-gray-300"><CheckIcon /><span>{finding}</span></li>)}</ul>
                             </div>
                              <div className="mt-6">
                                 <h3 className="text-lg font-semibold text-white">Free Quick Fixes</h3>
-                                <ul className="mt-3 space-y-2">
-                                    {(section.quickTips || []).map((tip, i) => <li key={i} className="flex items-start text-gray-300"><CheckIcon /><span className="min-w-0 break-words">{tip}</span></li>)}
-                                </ul>
+                                <ul className="mt-3 space-y-2">{(section.quickTips || []).map((tip, i) => <li key={i} className="flex items-start text-gray-300"><CheckIcon /><span>{tip}</span></li>)}</ul>
                             </div>
-                            
-                            {isReportUnlocked && section.lockedContent ? (
+                            {isReportUnlocked && section.lockedContent && section.lockedContent.detailedTips ? (
                                 <div className="mt-8 space-y-8 animate-fade-in">
                                     <div>
                                         <h3 className="text-lg md:text-xl font-bold text-green-400">Detailed Improvements</h3>
-                                        <ul className="mt-3 list-disc list-inside text-gray-300 space-y-2 break-words">
-                                            {section.lockedContent.detailedTips.map((tip, i) => <li key={i}>{tip}</li>)}
-                                        </ul>
+                                        <ul className="mt-3 list-disc list-inside text-gray-300 space-y-2">{section.lockedContent.detailedTips.map((tip, i) => <li key={i}>{tip}</li>)}</ul>
                                     </div>
-                                     <div>
+                                    <div>
                                         <h3 className="text-lg md:text-xl font-bold text-green-400">Rewritten Examples</h3>
                                         <div className="mt-3 space-y-4">
-                                        {section.lockedContent.examples.map((ex, i) => (
-                                            <div key={i} className="p-4 border border-gray-700 rounded-lg">
-                                                <p className="text-sm font-semibold text-red-400">Before:</p>
-                                                <p className="text-sm text-gray-400 italic pl-4 border-l-2 border-red-500/50 ml-2 py-1 break-words">"{ex.before}"</p>
-                                                <p className="text-sm font-semibold text-green-400 mt-3">After:</p>
-                                                <p className="text-sm text-gray-200 pl-4 border-l-2 border-green-500/50 ml-2 py-1 whitespace-pre-wrap break-words">{ex.after}</p>
-                                            </div>
-                                        ))}
+                                            {(section.lockedContent.examples || []).map((ex, i) => (
+                                                <div key={i} className="p-4 border border-gray-700 rounded-lg">
+                                                    <p className="text-sm font-semibold text-red-400">Before:</p><p className="text-sm text-gray-400 italic pl-4 border-l-2 border-red-500/50 ml-2 py-1">"{ex.before}"</p>
+                                                    <p className="text-sm font-semibold text-green-400 mt-3">After:</p><p className="text-sm text-gray-200 pl-4 border-l-2 border-green-500/50 ml-2 py-1 whitespace-pre-wrap">{ex.after}</p>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                     <div>
                                         <h3 className="text-lg md:text-xl font-bold text-green-400">Why It Matters</h3>
-                                        <p className="mt-2 text-gray-300 break-words">{section.lockedContent.explanation}</p>
+                                        <p className="mt-2 text-gray-300">{section.lockedContent.explanation}</p>
                                     </div>
                                 </div>
-                            ) : (
-                                <LockedContent onUnlock={() => { setIsReportUnlocked(true); showNotification('Full Report Unlocked!', 'success'); }} />
-                            )}
+                            ) : ( <LockedContent onUnlock={onUnlock} unlocking={unlocking} /> )}
                         </div>
                     );
                 }
-
                 return null;
             };
-
-            const AccordionContent = ({ report, activeViewId, isReportUnlocked, onUnlock }) => {
-                const activeFix = report.topFixes.find(f => f.id === activeViewId);
-                const activeSection = report.sections.find(s => s.id === activeViewId);
-
-                if (activeFix) {
-                     return (
-                        <div className="lg:hidden p-4 bg-gray-800/50 animate-fade-in border-t border-gray-700">
-                             <h2 className="text-lg font-bold text-white mb-1 break-words">Top Fix: <span className="text-[#00C853]">{activeFix.title}</span></h2>
-                             <p className="text-gray-400 text-sm mb-4 break-words">{activeFix.problem}</p>
-                             <div className="border-t border-gray-700 pt-4 space-y-4">
-                                <div>
-                                    <h3 className="text-md font-bold text-green-400">The Solution</h3>
-                                    <p className="mt-1 text-sm text-gray-300 break-words">{activeFix.solution.explanation}</p>
-                                </div>
-                                <div className="p-3 border border-gray-700 rounded-lg">
-                                    <p className="text-xs font-semibold text-red-400">Before:</p>
-                                    <p className="text-xs text-gray-400 italic pl-3 border-l-2 border-red-500/50 ml-1 py-1 break-words">"{activeFix.solution.before}"</p>
-                                    <p className="text-xs font-semibold text-green-400 mt-2">After (Suggestion):</p>
-                                    <p className="text-xs text-gray-200 pl-3 border-l-2 border-green-500/50 ml-1 py-1 whitespace-pre-wrap break-words">{activeFix.solution.after}</p>
-                                </div>
-                            </div>
-                        </div>
-                    );
-                }
-
-                if (activeSection) {
-                    return (
-                        <div className="lg:hidden p-4 bg-gray-800/50 animate-fade-in border-t border-gray-700">
-                            <div className="border-b border-gray-700 pb-4">
-                                <h3 className="text-md font-semibold text-white">Key Findings</h3>
-                                <ul className="mt-2 space-y-1.5">
-                                    {(activeSection.freeFindings || []).map((finding, i) => <li key={i} className="flex items-start text-sm text-gray-300"><CheckIcon /><span className="min-w-0 break-words">{finding}</span></li>)}
-                                </ul>
-                            </div>
-                            <div className="mt-4">
-                                <h3 className="text-md font-semibold text-white">Free Quick Fixes</h3>
-                                <ul className="mt-2 space-y-1.5">
-                                    {(activeSection.quickTips || []).map((tip, i) => <li key={i} className="flex items-start text-sm text-gray-300"><CheckIcon /><span className="min-w-0 break-words">{tip}</span></li>)}
-                                </ul>
-                            </div>
-
-                            {isReportUnlocked && activeSection.lockedContent ? (
-                                <div className="mt-6 space-y-6">
-                                    {/* Unlocked content for mobile */}
-                                </div>
-                            ) : (
-                                <LockedContent onUnlock={onUnlock} />
-                            )}
-                        </div>
-                    );
-                }
-                return null;
-            }
 
             const AnalyzerInput = () => (
                 <>
@@ -646,61 +526,32 @@
                         <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white">AI Profile Analyzer</h1>
                         <p className="mt-4 text-gray-400">Get an instant analysis of your Resume or LinkedIn profile to identify weaknesses and outshine the competition.</p>
                     </div>
-
                     <div className="max-w-2xl mx-auto mt-12">
                         <div className="flex justify-center p-1 bg-gray-800 rounded-lg mb-6">
-                            <button onClick={() => setAnalyzerType('resume')} className={`w-1/2 py-2.5 text-sm font-semibold rounded-md transition-colors ${analyzerType === 'resume' ? 'bg-[#00C853] text-black' : 'text-gray-400 hover:text-white'}`}>
-                                Resume Analyzer
-                            </button>
-                            <button onClick={() => setAnalyzerType('linkedin')} className={`w-1/2 py-2.5 text-sm font-semibold rounded-md transition-colors ${analyzerType === 'linkedin' ? 'bg-[#00C853] text-black' : 'text-gray-400 hover:text-white'}`}>
-                                LinkedIn Analyzer
-                            </button>
+                            <button onClick={() => setAnalyzerType('resume')} className={`w-1/2 py-2.5 text-sm font-semibold rounded-md transition-colors ${analyzerType === 'resume' ? 'bg-[#00C853] text-black' : 'text-gray-400 hover:text-white'}`}>Resume Analyzer</button>
+                            <button disabled className={`w-1/2 py-2.5 text-sm font-semibold rounded-md transition-colors ${analyzerType === 'linkedin' ? 'bg-[#00C853] text-black' : 'text-gray-400 hover:text-white'} cursor-not-allowed opacity-50`}>LinkedIn (Soon)</button>
                         </div>
-
-                        {analyzerType === 'resume' ? (
-                            <Card className="p-6 sm:p-8 hover:border-[#00C853]/50 transition-colors">
-                                <div className="flex justify-center">
-                                    <label htmlFor="file-upload" className="cursor-pointer text-center p-8 border-2 border-dashed border-gray-600 rounded-xl hover:border-green-500 hover:bg-gray-800/50 transition-colors w-full">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-                                        <p className="mt-2 font-semibold text-white">Click to Upload your Resume</p>
-                                        <p className="text-xs text-gray-500">PDF up to 5MB</p>
-                                    </label>
-                                    <input id="file-upload" type="file" accept=".pdf" onChange={handleFileChange} className="hidden"/>
-                                </div>
-                                {file && <p className="mt-4 text-sm text-center text-gray-400">Selected: <span className="font-semibold text-gray-200">{file.name}</span></p>}
-                                <button onClick={handleAnalyze} disabled={loading || !file} className="mt-6 w-full py-3 font-semibold text-black bg-[#00C853] rounded-lg hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed transition-transform duration-200 disabled:transform-none hover:scale-105">
-                                    {loading ? 'Analyzing...' : 'Grade My Resume'}
-                                </button>
-                            </Card>
-                        ) : (
-                            <Card className="p-6 sm:p-8 hover:border-[#00C853]/50 transition-colors">
-                                <div className="space-y-4">
-                                    <label htmlFor="linkedin-url" className="block text-sm font-medium text-gray-300">
-                                        Enter your LinkedIn Profile URL
-                                    </label>
-                                    <input
-                                        type="url"
-                                        id="linkedin-url"
-                                        value={linkedinUrl}
-                                        onChange={(e) => setLinkedinUrl(e.target.value)}
-                                        placeholder="https://www.linkedin.com/in/your-profile"
-                                        className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition"
-                                    />
-                                </div>
-                                <button onClick={handleAnalyze} disabled={loading || !linkedinUrl} className="mt-6 w-full py-3 font-semibold text-black bg-[#00C853] rounded-lg hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed transition-transform duration-200 disabled:transform-none hover:scale-105">
-                                    {loading ? 'Analyzing...' : 'Analyze My LinkedIn'}
-                                </button>
-                            </Card>
-                        )}
+                        <Card className="p-6 sm:p-8 hover:border-[#00C853]/50 transition-colors">
+                            <div className="flex justify-center">
+                                <label htmlFor="file-upload" className="cursor-pointer text-center p-8 border-2 border-dashed border-gray-600 rounded-xl hover:border-green-500 hover:bg-gray-800/50 transition-colors w-full">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                                    <p className="mt-2 font-semibold text-white">Click to Upload your Resume</p>
+                                    <p className="text-xs text-gray-500">PDF up to 5MB</p>
+                                </label>
+                                <input id="file-upload" type="file" accept=".pdf" onChange={handleFileChange} className="hidden"/>
+                            </div>
+                            {file && <p className="mt-4 text-sm text-center text-gray-400">Selected: <span className="font-semibold text-gray-200">{file.name}</span></p>}
+                            <button onClick={handleAnalyze} disabled={loading || !file} className="mt-6 w-full py-3 font-semibold text-black bg-[#00C853] rounded-lg hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed transition-transform duration-200 disabled:transform-none hover:scale-105">
+                                {loading ? 'Analyzing...' : 'Grade My Resume'}
+                            </button>
+                        </Card>
                     </div>
                 </>
             );
 
             return (
                 <div className="container mx-auto px-4 sm:px-6 py-12 md:py-16 animate-fade-in min-h-screen">
-                    {!report ? (
-                        <AnalyzerInput />
-                    ) : (
+                    {!report ? ( <AnalyzerInput /> ) : (
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-8 animate-slide-in-up">
                             <aside className="lg:col-span-4 xl:col-span-3">
                                 <div className="p-4 rounded-xl bg-gray-900 border border-gray-800 lg:sticky lg:top-24">
@@ -708,64 +559,42 @@
                                         <ScoreDonut score={report.overallScore} />
                                         <p className="mt-3 text-center text-sm text-gray-400 break-words">{report.overallSummary}</p>
                                     </div>
-                                    
                                     <h3 className="font-semibold text-gray-200 mt-6 mb-3 text-[#00C853]">Top 5 Actionable Fixes (Free)</h3>
                                     <div className="space-y-2">
-                                        {(report.topFixes || []).slice(0, 5).map(fix => {
+                                        {(report.topFixes || []).map(fix => {
                                             const isAccordionOpen = openAccordionId === fix.id;
                                             return (
-                                                <div key={fix.id} className={`rounded-lg overflow-hidden transition-colors duration-200 ${isAccordionOpen ? 'bg-gray-800' : 'bg-transparent'}`}>
-                                                    <button onClick={() => {
-                                                                setActiveView({ type: 'top_fixes', id: fix.id });
-                                                                setOpenAccordionId(isAccordionOpen ? null : fix.id);
-                                                            }}
-                                                        className={`w-full text-left p-3 flex items-center border-2 transition-colors rounded-lg ${activeView.id === fix.id ? `border-green-500 lg:bg-gray-800` : 'border-transparent'} hover:bg-gray-800/50`}>
-                                                        <div className="w-6 h-6 flex items-center justify-center rounded-md font-bold text-lg text-white flex-shrink-0 bg-green-600 mr-3">
-                                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                                        </div>
+                                                <div key={fix.id} className={`rounded-lg overflow-hidden transition-colors ${isAccordionOpen ? 'bg-gray-800' : 'bg-transparent'}`}>
+                                                    <button onClick={() => { setActiveView({ type: 'top_fixes', id: fix.id }); setOpenAccordionId(isAccordionOpen ? null : fix.id); }} className={`w-full text-left p-3 flex items-center border-2 transition-colors rounded-lg ${activeView.id === fix.id ? `border-green-500 lg:bg-gray-800` : 'border-transparent'} hover:bg-gray-800/50`}>
+                                                        <div className="w-6 h-6 flex items-center justify-center rounded-md font-bold text-lg text-white flex-shrink-0 bg-green-600 mr-3"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg></div>
                                                         <p className="font-semibold text-gray-100 flex-grow truncate">{fix.title}</p>
-                                                        <ChevronDownIcon className={`w-5 h-5 text-gray-400 transition-transform duration-300 lg:hidden ${isAccordionOpen ? 'transform rotate-180' : ''}`} />
+                                                        <ChevronDownIcon className={`w-5 h-5 text-gray-400 lg:hidden transition-transform ${isAccordionOpen ? 'rotate-180' : ''}`} />
                                                     </button>
-                                                    {isAccordionOpen && (
-                                                        <AccordionContent report={report} activeViewId={fix.id} isReportUnlocked={isReportUnlocked} onUnlock={() => setIsReportUnlocked(true)} />
-                                                    )}
                                                 </div>
                                             );
                                         })}
                                     </div>
-                                    
                                     <div className="border-t border-gray-700 my-4"></div>
-                                    
                                     <h3 className="font-semibold text-gray-200 mb-3">Detailed Report</h3>
                                     <div className="space-y-2">
                                         {(report.sections || []).map(section => {
-                                            const isAccordionOpen = openAccordionId === section.id;
+                                             const isAccordionOpen = openAccordionId === section.id;
                                             return (
-                                                <div key={section.id} className={`rounded-lg overflow-hidden transition-colors duration-200 ${isAccordionOpen ? 'bg-gray-800' : 'bg-transparent'}`}>
-                                                    <button onClick={() => {
-                                                                setActiveView({ type: 'section', id: section.id });
-                                                                setOpenAccordionId(isAccordionOpen ? null : section.id);
-                                                            }}
-                                                        className={`w-full text-left p-3 flex items-center border-2 transition-colors rounded-lg ${activeView.id === section.id ? `border-green-500 lg:bg-gray-800` : 'border-transparent'} hover:bg-gray-800/50`}>
+                                                <div key={section.id} className={`rounded-lg overflow-hidden transition-colors ${isAccordionOpen ? 'bg-gray-800' : 'bg-transparent'}`}>
+                                                    <button onClick={() => { setActiveView({ type: 'section', id: section.id }); setOpenAccordionId(isAccordionOpen ? null : section.id);}} className={`w-full text-left p-3 flex items-center border-2 transition-colors rounded-lg ${activeView.id === section.id ? `border-green-500 lg:bg-gray-800` : 'border-transparent'} hover:bg-gray-800/50`}>
                                                         <p className="font-semibold text-gray-100 flex-grow">{section.title}</p>
                                                         <div className={`font-bold text-lg mr-3`} style={{color: getScoreColor(section.score)}}>{section.score}</div>
-                                                        <ChevronDownIcon className={`w-5 h-5 text-gray-400 transition-transform duration-300 lg:hidden ${isAccordionOpen ? 'transform rotate-180' : ''}`} />
+                                                        <ChevronDownIcon className={`w-5 h-5 text-gray-400 lg:hidden transition-transform ${isAccordionOpen ? 'rotate-180' : ''}`} />
                                                     </button>
-                                                     {isAccordionOpen && (
-                                                        <AccordionContent report={report} activeViewId={section.id} isReportUnlocked={isReportUnlocked} onUnlock={() => setIsReportUnlocked(true)} />
-                                                    )}
                                                 </div>
                                             );
                                         })}
                                     </div>
-                                    <button onClick={resetState} className="w-full mt-4 py-2 text-sm font-semibold text-gray-300 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors">
-                                        Analyze Another
-                                    </button>
+                                    <button onClick={resetState} className="w-full mt-4 py-2 text-sm font-semibold text-gray-300 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors">Analyze Another</button>
                                 </div>
                             </aside>
-
                             <main className="lg:col-span-8 xl:col-span-9">
-                                <MainContentPane report={report} activeView={activeView} isReportUnlocked={isReportUnlocked} onUnlock={() => { setIsReportUnlocked(true); showNotification('Full Report Unlocked!', 'success'); }} />
+                                <MainContentPane report={report} activeView={activeView} isReportUnlocked={isReportUnlocked} onUnlock={handleUnlock} unlocking={unlocking} />
                             </main>
                         </div>
                     )}
@@ -791,7 +620,6 @@
 
         function App() {
             const [notifications, setNotifications] = React.useState([]);
-
             const showNotification = (message, type = 'success') => {
                 const id = Date.now();
                 setNotifications(prev => [...prev, { id, message, type }]);
@@ -799,7 +627,6 @@
                     setNotifications(prev => prev.filter(n => n.id !== id));
                 }, 3000);
             };
-            
             return (
                 <div className="bg-black font-sans text-gray-300">
                     <CustomCursor />
