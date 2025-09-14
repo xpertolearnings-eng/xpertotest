@@ -1,18 +1,15 @@
 {
-  "name": "xperto-website",
+  "name": "netlify-functions",
   "version": "1.0.0",
-  "description": "Edtech platform with AI analysis features.",
-  "main": "index.html",
+  "description": "Netlify functions for Xperto",
+  "main": "createJob.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@google/generative-ai": "^0.24.1"
-  },
-  "devDependencies": {
-    "tailwindcss": "^3.4.1"
+    "firebase-admin": "^11.8.0",
+    "razorpay": "^2.9.2"
   }
 }
-
