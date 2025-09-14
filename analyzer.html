@@ -39,14 +39,14 @@
     <script type="text/babel">
         // --- FIREBASE INITIALIZATION ---
         const firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_AUTH_DOMAIN",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_STORAGE_BUCKET",
-            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-            appId: "YOUR_APP_ID"
+          apiKey: "AIzaSyBojAxw9C9m2Wj3ZFGj-X0w9pQrmkFScYk",
+          authDomain: "xperto-8a9b2.firebaseapp.com",
+          projectId: "xperto-8a9b2",
+          storageBucket: "xperto-8a9b2.appspot.com",
+          messagingSenderId: "633106003192",
+          appId: "1:633106003192:web:ef9027260c49663124f70d",
+          measurementId: "G-6VNTG4BKRV"
         };
-        // NOTE: Replace the above placeholders with your actual Firebase project configuration.
         
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
@@ -448,7 +448,10 @@
             );
         };
 
-        ReactDOM.render(<App />, document.getElementById('root'));
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
+        root.render(<App />);
     </script>
 </body>
 </html>
+
