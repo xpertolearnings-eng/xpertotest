@@ -1,4 +1,3 @@
-<!-- FILE: analyzer.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,672 +5,450 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Xperto - AI Analyzer</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='50' fill='%2300C853'/></svg>">
-    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <!-- React Libraries -->
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    
     <!-- Babel for JSX Transpilation -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Razorpay Checkout -->
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-
-    <!-- Firebase SDKs (using modules) -->
-    <script type="module">
-        // Your web app's Firebase configuration
-        const firebaseConfig = {
-          apiKey: "AIzaSyBojAxw9C9m2Wj3ZFGj-X0w9pQrmkFScYk",
-          authDomain: "xperto-8a9b2.firebaseapp.com",
-          projectId: "xperto-8a9b2",
-          storageBucket: "xperto-8a9b2.appspot.com",
-          messagingSenderId: "633106003192",
-          appId: "1:633106003192:web:ef9027260c49663124f70d",
-          measurementId: "G-6VNTG4BKRV"
-        };
-
-        // Make the config available globally for our React component script
-        window.firebaseConfig = firebaseConfig;
-    </script>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.19.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.19.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.19.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.19.1/firebase-storage-compat.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         
-        body { 
-            font-family: 'Inter', sans-serif; 
-            cursor: none; 
-            background-color: #000; 
-        }
-
-        .custom-cursor {
-            position: fixed;
-            width: 24px;
-            height: 24px;
-            border: 2px solid #00C853;
-            border-radius: 50%;
-            pointer-events: none;
-            transform: translate(-50%, -50%);
-            transition: width 0.2s, height 0.2s, background-color 0.2s;
-            z-index: 9999;
-            left: -100px; /* Initially hide off-screen */
-        }
-
-        button:hover ~ .custom-cursor, a:hover ~ .custom-cursor, [onclick]:hover ~ .custom-cursor, input[type=file] + label:hover ~ .custom-cursor {
-             width: 40px;
-             height: 40px;
-             background-color: rgba(0, 200, 83, 0.1);
-        }
-
+        body { font-family: 'Inter', sans-serif; cursor: none; background-color: #000; }
+        .custom-cursor { position: fixed; width: 24px; height: 24px; border: 2px solid #00C853; border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%); transition: width 0.2s, height 0.2s, background-color 0.2s; z-index: 9999; left: -100px; }
+        button:hover ~ .custom-cursor, a:hover ~ .custom-cursor, [onclick]:hover ~ .custom-cursor, input[type=file] ~ .custom-cursor, label:hover ~ .custom-cursor { width: 40px; height: 40px; background-color: rgba(0, 200, 83, 0.1); }
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
         .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
-        
-        @keyframes slide-in-up {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        @keyframes slide-in-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         .animate-slide-in-up { animation: slide-in-up 0.6s ease-out forwards; }
+        .modal-content { animation: slide-in-up 0.3s ease-out; }
     </style>
 </head>
 <body>
     <div id="root"></div>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 
     <script type="text/babel">
-      // --- Firebase SDK Imports ---
-      // These are imported via the main script tag and will be available on the window
-      // For a production build system (like Vite/Next.js), you'd use npm imports.
-      
-      // --- ASSETS & ICONS ---
-      const Logo = () => (
-          <svg className="h-8 w-auto text-gray-100" viewBox="0 0 170 50" xmlns="http://www.w3.org/2000/svg">
-              <text x="0" y="36" fontFamily="Inter, system-ui, sans-serif" fontSize="38" fontWeight="bold" fill="currentColor">
-                  Xpert
-              </text>
-              <g transform="translate(118, 0)">
-                  <path d="M 25 2.5 A 22.5 22.5 0 1 1 2.5 25" stroke="#00C853" strokeWidth="3.5" fill="none" strokeLinecap="round" />
-                  <path d="M 25 47.5 A 22.5 22.5 0 1 1 47.5 25" stroke="#64ffda" strokeWidth="3.5" fill="none" strokeLinecap="round" />
-                  <circle cx="2.5" cy="25" r="4.5" fill="#00C853" />
-                  <circle cx="47.5" cy="25" r="4.5" fill="#64ffda" />
-                  <circle cx="25" cy="2.5" r="4.5" fill="white" />
-              </g>
-          </svg>
-      );
+        // --- FIREBASE INITIALIZATION ---
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        // NOTE: Replace the above placeholders with your actual Firebase project configuration.
+        
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const storage = firebase.storage();
 
-      const LockIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 inline-block mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>);
-      const CheckIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>);
-      const ChevronDownIcon = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" className={className || "h-5 w-5"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>);
+        // --- ASSETS & ICONS ---
+        const Logo = () => ( <svg className="h-8 w-auto text-gray-100" viewBox="0 0 170 50" xmlns="http://www.w3.org/2000/svg"><text x="0" y="36" fontFamily="Inter, system-ui, sans-serif" fontSize="38" fontWeight="bold" fill="currentColor">Xpert</text><g transform="translate(118, 0)"><path d="M 25 2.5 A 22.5 22.5 0 1 1 2.5 25" stroke="#00C853" strokeWidth="3.5" fill="none" strokeLinecap="round" /><path d="M 25 47.5 A 22.5 22.5 0 1 1 47.5 25" stroke="#64ffda" strokeWidth="3.5" fill="none" strokeLinecap="round" /><circle cx="2.5" cy="25" r="4.5" fill="#00C853" /><circle cx="47.5" cy="25" r="4.5" fill="#64ffda" /><circle cx="25" cy="2.5" r="4.5" fill="white" /></g></svg> );
+        const LockIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 inline-block mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>);
+        const CheckIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>);
+        const ChevronDownIcon = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" className={className || "h-5 w-5"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>);
 
-      // --- CORE UI COMPONENTS ---
-      const Header = ({ user, auth }) => {
-          const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-          const navItems = [
-              { id: 'home', label: 'Home', href: '/index.html' },
-              { id: 'courses', label: 'Courses', href: '/courses.html' },
-              { id: 'analyzer', label: 'AI Analyzer', href: '/analyzer.html' },
-              { id: 'freelance', label: 'Find Internships', href: '/internships.html' },
-          ];
-          
-          const currentPage = window.location.pathname.split('/').pop().split('.')[0] || 'index';
-          const activePageId = currentPage === 'index' ? 'home' : currentPage;
-
-          return (
-              <header className="bg-black/50 backdrop-blur-md sticky top-0 z-40 border-b border-gray-800">
-                  <nav className="container mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
-                      <a href="/index.html" className="flex items-center cursor-pointer">
-                          <Logo />
-                      </a>
-                      <div className="hidden md:flex items-center space-x-8">
-                          {navItems.map(item => (
-                              <a key={item.id} href={item.href} className={`text-gray-300 hover:text-white transition-colors duration-300 relative group ${activePageId === item.id ? 'font-semibold text-white' : ''}`}>
-                                  {item.label}
-                                  <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-[#00C853] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 ${activePageId === item.id ? 'scale-x-100' : ''}`}></span>
-                              </a>
-                          ))}
-                      </div>
-                      <div className="flex items-center space-x-4">
-                          {user ? (
-                              <button onClick={() => auth.signOut()} className="hidden sm:block px-5 py-2 text-sm font-medium text-gray-200 bg-gray-800 rounded-lg border border-gray-700 hover:bg-gray-700 focus:outline-none transition-all duration-300 hover:scale-105">Logout</button>
-                          ) : (
-                            <p className="hidden sm:block text-sm text-gray-400">Login to analyze</p>
-                          )}
-                          <div className="md:hidden">
-                              <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="text-gray-300 hover:text-white p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-inset focus:ring-green-500">
-                                  <span className="sr-only">Open main menu</span>
-                                  {isMenuOpen ? (
-                                      <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                                  ) : (
-                                      <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
-                                  )}
-                              </button>
-                          </div>
-                      </div>
-                  </nav>
-                  {isMenuOpen && (
-                      <div className="md:hidden animate-fade-in">
-                          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-                              {navItems.map(item => (
-                                  <a key={item.id} href={item.href} className={`block w-full text-left px-3 py-2 rounded-md text-base font-medium transition-colors ${activePageId === item.id ? 'bg-gray-900 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'}`}>
-                                      {item.label}
-                                  </a>
-                              ))}
-                               {user ? (
-                                <button onClick={() => auth.signOut()} className="sm:hidden block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white">Logout</button>
-                               ) : null}
-                          </div>
-                      </div>
-                  )}
-              </header>
-          );
-      };
-
-      const Footer = () => (
-          <footer className="bg-gray-900 text-white border-t border-gray-800">
-              <div className="container mx-auto px-4 sm:px-6 py-12">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-                      <div><h3 className="font-bold text-lg mb-4">Xperto</h3><p className="text-gray-400 text-sm">Upskilling India's Future Workforce.</p></div>
-                      <div><h3 className="font-semibold mb-4">Navigate</h3><ul className="space-y-2 text-gray-400 text-sm"><li><a href="/courses.html" className="hover:text-[#00C853]">Courses</a></li><li><a href="/analyzer.html" className="hover:text-[#00C853]">AI Analyzer</a></li><li><a href="/internships.html" className="hover:text-[#00C853]">Find Internships</a></li></ul></div>
-                      <div><h3 className="font-semibold mb-4">Legal</h3><ul className="space-y-2 text-gray-400 text-sm"><li><a href="#" className="hover:text-[#00C853]">Terms of Service</a></li><li><a href="#" className="hover:text-[#00C853]">Privacy Policy</a></li></ul></div>
-                      <div><h3 className="font-semibold mb-4">Connect</h3><ul className="space-y-2 text-gray-400 text-sm"><li><a href="#" className="hover:text-[#00C853]">Twitter</a></li><li><a href="#" className="hover:text-[#00C853]">LinkedIn</a></li></ul></div>
-                  </div>
-                  <div className="mt-12 border-t border-gray-700 pt-8 text-center text-gray-500 text-sm"><p>&copy; {new Date().getFullYear()} Xperto. All rights reserved.</p></div>
-              </div>
-          </footer>
-      );
-
-      const NotificationCenter = ({ notifications }) => (
-          <div className="fixed bottom-5 right-5 z-50 space-y-3">
-              {notifications.map(n => (
-                  <div key={n.id} className={`px-4 py-3 rounded-lg shadow-lg text-white font-semibold animate-slide-in-up ${n.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
-                      {n.message}
-                  </div>
-              ))}
-          </div>
-      );
-
-      const Card = ({ children, className }) => (<div className={`bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden transition-all duration-300 hover:border-[#00C853]/50 hover:shadow-[0_0_20px_rgba(0,200,83,0.3)] ${className}`}>{children}</div>);
-
-      const Modal = ({ children, onClose }) => (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fade-in p-4" onClick={onClose}>
-            <div className="bg-gray-900 border border-gray-800 rounded-lg shadow-lg w-full max-w-md" onClick={e => e.stopPropagation()}>{children}</div>
-        </div>
-      );
-      
-      const AuthForm = ({ auth, db, showNotification, onAuthSuccess }) => {
-        const { createUserWithEmailAndPassword, signInWithEmailAndPassword } = auth.firebase;
-        const { doc, setDoc } = db.firebase;
-
-        const [isLogin, setIsLogin] = React.useState(true);
-        const [email, setEmail] = React.useState('');
-        const [password, setPassword] = React.useState('');
-        const [name, setName] = React.useState('');
-        const [mobile, setMobile] = React.useState('');
-        const [loading, setLoading] = React.useState(false);
-        const [error, setError] = React.useState('');
-
-        const handleSubmit = async (e) => {
-            e.preventDefault();
-            setLoading(true);
-            setError('');
-
-            try {
-                if(isLogin) {
-                    await signInWithEmailAndPassword(auth.instance, email, password);
-                    showNotification('Logged in successfully!', 'success');
-                } else {
-                    const userCredential = await createUserWithEmailAndPassword(auth.instance, email, password);
-                    const user = userCredential.user;
-                    // Create user profile in Firestore
-                    await setDoc(doc(db.instance, "users", user.uid), {
-                        name: name,
-                        mobile: mobile,
-                        email: email,
-                        createdAt: new Date(),
-                    });
-                    showNotification('Account created successfully!', 'success');
-                }
-                onAuthSuccess();
-            } catch (err) {
-                setError(err.message.replace('Firebase: ', ''));
-                showNotification(err.message.replace('Firebase: ', ''), 'error');
-            } finally {
-                setLoading(false);
-            }
+        // --- CORE UI COMPONENTS ---
+        const Header = ({ user, onLogout }) => {
+            return (
+                <header className="bg-black/50 backdrop-blur-md sticky top-0 z-40 border-b border-gray-800">
+                    <nav className="container mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
+                        <a href="/index.html" className="flex items-center cursor-pointer"><Logo /></a>
+                        <div className="hidden md:flex items-center space-x-8">
+                            <a href="/index.html" className="text-gray-300 hover:text-white">Home</a>
+                            <a href="/courses.html" className="text-gray-300 hover:text-white">Courses</a>
+                            <a href="/analyzer.html" className="font-semibold text-white relative group">AI Analyzer<span className="absolute bottom-[-4px] left-0 w-full h-0.5 bg-[#00C853]"></span></a>
+                            <a href="/internships.html" className="text-gray-300 hover:text-white">Find Internships</a>
+                        </div>
+                        <div className="flex items-center space-x-4">
+                            {user ? (
+                                <button onClick={onLogout} className="px-5 py-2 text-sm font-medium text-gray-200 bg-gray-800 rounded-lg border border-gray-700 hover:bg-gray-700">Logout</button>
+                            ) : (
+                                <p className="text-sm text-gray-400">Not Logged In</p>
+                            )}
+                        </div>
+                    </nav>
+                </header>
+            );
         };
 
-        return (
-            <div className="p-8">
-                <h2 className="text-2xl font-bold text-white text-center mb-2">{isLogin ? 'Welcome Back' : 'Create an Account'}</h2>
-                <p className="text-gray-400 text-center mb-6">{isLogin ? 'Log in to continue.' : 'Sign up to get your free analysis.'}</p>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    {!isLogin && (
-                        <>
-                            <input type="text" placeholder="Full Name" value={name} onChange={e => setName(e.target.value)} required className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500" />
-                            <input type="tel" placeholder="Mobile Number" value={mobile} onChange={e => setMobile(e.target.value)} required className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500" />
-                        </>
-                    )}
-                    <input type="email" placeholder="Email Address" value={email} onChange={e => setEmail(e.target.value)} required className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500" />
-                    <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500" />
-                    {error && <p className="text-red-500 text-sm">{error}</p>}
-                    <button type="submit" disabled={loading} className="w-full py-3 font-semibold text-black bg-[#00C853] rounded-lg hover:bg-green-400 disabled:bg-gray-600">
-                        {loading ? 'Processing...' : (isLogin ? 'Login' : 'Sign Up')}
-                    </button>
-                </form>
-                <p className="text-center text-sm text-gray-400 mt-4">
-                    {isLogin ? "Don't have an account?" : "Already have an account?"}
-                    <button onClick={() => { setIsLogin(!isLogin); setError('')}} className="font-semibold text-green-400 hover:underline ml-1">
-                        {isLogin ? 'Sign Up' : 'Login'}
-                    </button>
-                </p>
+        const Footer = () => (
+            <footer className="bg-gray-900 text-white border-t border-gray-800 mt-20"><div className="container mx-auto px-4 sm:px-6 py-12"><div className="mt-12 border-t border-gray-700 pt-8 text-center text-gray-500 text-sm"><p>&copy; {new Date().getFullYear()} Xperto. All rights reserved.</p></div></div></footer>
+        );
+
+        const NotificationCenter = ({ notifications }) => (
+            <div className="fixed bottom-5 right-5 z-50 space-y-3">
+                {notifications.map(n => (
+                    <div key={n.id} className={`px-4 py-3 rounded-lg shadow-lg text-white font-semibold animate-slide-in-up ${n.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
+                        {n.message}
+                    </div>
+                ))}
             </div>
         );
-      };
 
-      // --- PAGE ---
-      const AnalyzerPage = ({ user, auth, db, storage, showNotification }) => {
-          const [jobId, setJobId] = React.useState(null);
-          const [jobData, setJobData] = React.useState(null);
-          const [file, setFile] = React.useState(null);
-          const [linkedinUrl, setLinkedinUrl] = React.useState('');
-          const [loading, setLoading] = React.useState(false); // General loading for upload/job creation
-          const [unlocking, setUnlocking] = React.useState(false);
-          const [showAuthModal, setShowAuthModal] = React.useState(false);
-          
-          const { ref, uploadBytesResumable, getDownloadURL } = storage.firebase;
-          const { doc, onSnapshot } = db.firebase;
-
-          // Listen for real-time updates on the current job
-          React.useEffect(() => {
-              if (!jobId || !db.instance) return;
-              const unsubscribe = onSnapshot(doc(db.instance, "jobs", jobId), (doc) => {
-                  if (doc.exists()) {
-                      setJobData(doc.data());
-                  } else {
-                      showNotification('Job data not found.', 'error');
-                  }
-              });
-              return () => unsubscribe();
-          }, [jobId, db.instance]);
-          
-          const resetState = () => {
-              setFile(null); setLinkedinUrl(''); setJobId(null); setJobData(null); setLoading(false);
-          };
-
-          const handleAnalyze = async () => {
-              if (!user) {
-                  setShowAuthModal(true);
-                  return;
-              }
-              if (!file && !linkedinUrl) {
-                  showNotification('Please upload a resume or provide a LinkedIn URL.', 'error');
-                  return;
-              }
-
-              setLoading(true);
-              try {
-                  let fileUrl = null;
-                  let filename = null;
-                  
-                  if (file) {
-                      // 1. Upload file to Firebase Storage
-                      filename = `${Date.now()}-${file.name}`;
-                      const storageRef = ref(storage.instance, `resumes/${user.uid}/${filename}`);
-                      const uploadTask = await uploadBytesResumable(storageRef, file);
-                      fileUrl = await getDownloadURL(uploadTask.ref);
-                      showNotification('Resume uploaded successfully!', 'success');
-                  }
-                  
-                  // 2. Create job via Netlify function
-                  const idToken = await user.getIdToken();
-                  const response = await fetch('/.netlify/functions/createJob', {
-                      method: 'POST',
-                      headers: {
-                          'Content-Type': 'application/json',
-                          'Authorization': `Bearer ${idToken}`
-                      },
-                      body: JSON.stringify({ fileUrl, linkedinUrl, filename })
-                  });
-
-                  if (!response.ok) throw new Error('Failed to create analysis job.');
-                  
-                  const { jobId: newJobId } = await response.json();
-                  setJobId(newJobId); // This will trigger the onSnapshot listener
-                  
-              } catch (error) {
-                  console.error("Analysis initiation failed:", error);
-                  showNotification(`Error: ${error.message}`, 'error');
-              } finally {
-                  setLoading(false);
-              }
-          };
-
-          const handleFileChange = (e) => {
-            const uploadedFile = e.target.files[0];
-            if (!uploadedFile) return;
-
-            // Client-side validation
-            if (uploadedFile.size > 5 * 1024 * 1024) { // 5MB
-                showNotification('File size must be less than 5MB.', 'error');
-                return;
-            }
-            if (!['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(uploadedFile.type)) {
-                showNotification('Only PDF and DOCX files are allowed.', 'error');
-                return;
-            }
-            setFile(uploadedFile);
-            setLinkedinUrl('');
-            showNotification(`Selected file: ${uploadedFile.name}`, 'success');
-          };
-
-          const handleUnlock = async () => {
-            setUnlocking(true);
-            try {
-                const idToken = await user.getIdToken();
-                const res = await fetch('/.netlify/functions/createRazorpayOrder', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${idToken}`
-                    },
-                    body: JSON.stringify({ jobId })
-                });
-
-                if (!res.ok) throw new Error('Could not create payment order.');
-
-                const { order, key } = await res.json();
-
-                const options = {
-                    key,
-                    amount: order.amount,
-                    currency: "INR",
-                    name: "Xperto",
-                    description: "Full Report Unlock",
-                    order_id: order.id,
-                    handler: function (response) {
-                        // This part is now less critical as we rely on webhooks for confirmation.
-                        // We can show a pending message to the user.
-                        showNotification('Payment successful! Unlocking report...', 'success');
-                    },
-                    prefill: {
-                        name: user.displayName || 'Valued User',
-                        email: user.email,
-                    },
-                    theme: {
-                        color: "#00C853"
-                    }
-                };
-                const rzp = new window.Razorpay(options);
-                rzp.on('payment.failed', function (response){
-                    showNotification(`Payment failed: ${response.error.description}`, 'error');
-                });
-                rzp.open();
-
-            } catch (error) {
-                 showNotification(`Error: ${error.message}`, 'error');
-            } finally {
-                setUnlocking(false);
-            }
-          };
-
-          if (jobData) {
-              return <ReportView jobData={jobData} onUnlock={handleUnlock} unlocking={unlocking} onReset={resetState} />;
-          }
-
-          return (
-              <div className="container mx-auto px-4 sm:px-6 py-12 md:py-16 animate-fade-in min-h-screen">
-                  {showAuthModal && (
-                    <Modal onClose={() => setShowAuthModal(false)}>
-                        <AuthForm auth={auth} db={db} showNotification={showNotification} onAuthSuccess={() => setShowAuthModal(false)} />
-                    </Modal>
-                  )}
-                  <div className="max-w-3xl mx-auto text-center">
-                      <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white">AI Profile Analyzer</h1>
-                      <p className="mt-4 text-gray-400">Get an instant, data-driven analysis of your Resume to identify weaknesses and outshine the competition.</p>
-                  </div>
-                  <div className="max-w-2xl mx-auto mt-12">
-                      <Card className="p-6 sm:p-8 hover:border-[#00C853]/50 transition-colors">
-                            <input id="file-upload" type="file" accept=".pdf,.docx" onChange={handleFileChange} className="hidden"/>
-                            <label htmlFor="file-upload" className="cursor-pointer text-center p-8 border-2 border-dashed border-gray-600 rounded-xl hover:border-green-500 hover:bg-gray-800/50 transition-colors w-full flex flex-col items-center justify-center">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-                                <p className="mt-2 font-semibold text-white">Click to Upload your Resume</p>
-                                <p className="text-xs text-gray-500">PDF or DOCX, up to 5MB</p>
-                            </label>
-
-                          {file && <p className="mt-4 text-sm text-center text-gray-400">Selected: <span className="font-semibold text-gray-200">{file.name}</span></p>}
-                           <div className="relative flex items-center my-6">
-                                <div className="flex-grow border-t border-gray-600"></div>
-                                <span className="flex-shrink mx-4 text-gray-500 text-sm">OR</span>
-                                <div className="flex-grow border-t border-gray-600"></div>
-                            </div>
-                            <input 
-                                type="text" 
-                                placeholder="Paste LinkedIn Profile URL (coming soon)" 
-                                value={linkedinUrl} 
-                                onChange={e => { setLinkedinUrl(e.target.value); setFile(null); }}
-                                disabled
-                                className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed" 
-                            />
-                          <button onClick={handleAnalyze} disabled={loading || (!file && !linkedinUrl)} className="mt-6 w-full py-3 font-semibold text-black bg-[#00C853] rounded-lg hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed transition-transform duration-200 disabled:transform-none hover:scale-105">
-                              {loading ? 'Uploading & Creating Job...' : 'Grade My Resume'}
-                          </button>
-                      </Card>
-                  </div>
-              </div>
-          );
-      };
-      
-      const ReportView = ({ jobData, onUnlock, unlocking, onReset }) => {
-          const { status, preview, fullReport, unlocked } = jobData;
-          
-          if (status === 'pending' || status === 'processing') {
-             return (
-                 <div className="container mx-auto px-4 sm:px-6 py-12 md:py-16 min-h-screen flex flex-col items-center justify-center text-center">
-                    <div className="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-green-500"></div>
-                    <h2 className="text-2xl font-bold text-white mt-6">Analyzing Your Profile...</h2>
-                    <p className="text-gray-400 mt-2">Status: <span className="font-semibold capitalize text-yellow-400">{status}</span></p>
-                    <p className="text-gray-400 mt-1">This may take a minute. Please don't refresh the page.</p>
-                 </div>
-            );
-          }
-
-          if (status === 'error' || status === 'needs_manual_review') {
-              return (
-                 <div className="container mx-auto px-4 sm:px-6 py-12 md:py-16 min-h-screen flex flex-col items-center justify-center text-center">
-                    <h2 className="text-2xl font-bold text-red-500 mt-6">Analysis Failed</h2>
-                    <p className="text-gray-400 mt-2">We're sorry, an error occurred while analyzing your document.</p>
-                    <p className="text-gray-400 mt-1">{jobData.error || 'Please try again with a different file.'}</p>
-                    <button onClick={onReset} className="mt-6 px-6 py-2 font-semibold text-black bg-[#00C853] rounded-lg hover:bg-green-400">Try Again</button>
-                 </div>
-              );
-          }
-          
-          if (!preview) {
-             return <div className="text-center py-20 text-white">Generating preview...</div>;
-          }
-          
-          const report = unlocked ? fullReport : preview;
-
-          const getScoreColor = (score) => {
-              if (score < 50) return '#ef4444'; // red-500
-              if (score < 80) return '#facc15'; // yellow-400
-              return '#4ade80'; // green-400
-          };
-
-          const ScoreDonut = ({ score }) => {
-            const color = getScoreColor(score);
-            const circumference = 2 * Math.PI * 45;
-            const offset = circumference - (score / 100) * circumference;
+        const Card = ({ children, className }) => ( <div className={`bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden transition-all duration-300 hover:border-[#00C853]/50 hover:shadow-[0_0_20px_rgba(0,200,83,0.3)] ${className}`}>{children}</div> );
+        
+        const Modal = ({ children, onClose, isOpen }) => {
+            if (!isOpen) return null;
             return (
-                <div className="relative w-32 h-32 sm:w-40 sm:h-40">
-                    <svg className="w-full h-full" viewBox="0 0 100 100">
-                        <circle cx="50" cy="50" r="45" fill="transparent" stroke="#374151" strokeWidth="10" />
-                        <circle cx="50" cy="50" r="45" fill="transparent" stroke={color} strokeWidth="10" strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" transform="rotate(-90 50 50)" style={{ transition: 'stroke-dashoffset 0.5s ease-in-out' }} />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center"><span className="text-3xl sm:text-4xl font-bold" style={{ color }}>{score}</span></div>
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fade-in p-4" onClick={onClose}>
+                    <div className="bg-gray-900 border border-gray-800 rounded-lg shadow-lg w-full max-w-md p-6 sm:p-8 modal-content" onClick={e => e.stopPropagation()}>
+                        {children}
+                    </div>
                 </div>
             );
-          };
+        };
 
-          return (
-             <div className="container mx-auto px-4 sm:px-6 py-12 md:py-16 animate-slide-in-up">
-                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-8">
-                    <aside className="lg:col-span-4 xl:col-span-3">
-                         <div className="p-4 rounded-xl bg-gray-900 border border-gray-800 lg:sticky lg:top-24">
-                            <div className="flex flex-col items-center">
-                                <ScoreDonut score={report.score} />
-                                <p className="mt-3 text-center text-sm text-gray-400 break-words">{report.summary}</p>
-                            </div>
-                            <h3 className="font-semibold text-gray-200 mt-6 mb-3 text-[#00C853]">Top Improvements</h3>
-                            <div className="space-y-2">
-                                {(report.improvements || []).map((item, index) => (
-                                    <div key={index} className="p-3 bg-gray-800/50 rounded-lg flex items-start">
-                                      <CheckIcon/>
-                                      <p className="text-sm text-gray-300">{item}</p>
-                                    </div>
-                                ))}
-                            </div>
-                            <button onClick={onReset} className="w-full mt-4 py-2 text-sm font-semibold text-gray-300 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors">Analyze Another</button>
-                         </div>
-                    </aside>
-                    <main className="lg:col-span-8 xl:col-span-9">
-                        <Card className="p-6 sm:p-8">
-                            <h2 className="text-2xl font-bold text-white mb-4">Detailed Analysis</h2>
-                            <div className="space-y-6">
-                                <section>
-                                    <h3 className="text-lg font-bold text-green-400">Strengths</h3>
-                                    <ul className="mt-3 list-disc list-inside text-gray-300 space-y-2">
-                                        {(report.strengths || []).map((item, i) => <li key={i}>{item}</li>)}
-                                    </ul>
-                                </section>
-                                <section>
-                                    <h3 className="text-lg font-bold text-yellow-400">ATS Suggestions</h3>
-                                     <ul className="mt-3 list-disc list-inside text-gray-300 space-y-2">
-                                        {(report.atsSuggestions || []).map((item, i) => <li key={i}>{item}</li>)}
-                                    </ul>
-                                </section>
+        const AuthModal = ({ isOpen, onClose, showNotification }) => {
+            const [isLogin, setIsLogin] = React.useState(true);
+            const [email, setEmail] = React.useState('');
+            const [password, setPassword] = React.useState('');
+            const [name, setName] = React.useState('');
+            const [mobile, setMobile] = React.useState('');
+            const [error, setError] = React.useState('');
+            const [loading, setLoading] = React.useState(false);
 
-                                {unlocked && report.sectionSuggestions ? (
-                                    <div className="animate-fade-in space-y-6">
-                                        <h3 className="text-xl font-bold text-green-400 pt-4 border-t border-gray-700">Section-by-Section Breakdown</h3>
-                                        {Object.entries(report.sectionSuggestions).map(([section, suggestion]) => (
-                                            <div key={section}>
-                                                <h4 className="text-lg font-semibold text-white capitalize">{section}</h4>
-                                                <p className="text-gray-300 mt-1">{suggestion}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="mt-8 relative">
-                                        <div className="blur-sm pointer-events-none space-y-6 opacity-60">
-                                            <h3 className="text-xl font-bold text-white pt-4 border-t border-gray-700">Section-by-Section Breakdown</h3>
-                                            <p className="mt-2 text-sm text-gray-400 bg-gray-800/50 p-3 rounded-md">Unlock to see detailed, AI-powered suggestions for every section of your resume.</p>
-                                        </div>
-                                        <div className="absolute inset-0 bg-gray-900/80 flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-700 p-4 text-center">
-                                            <button onClick={onUnlock} disabled={unlocking} className="px-6 py-3 font-semibold text-black bg-[#00C853] rounded-lg hover:bg-green-400 transition-colors flex items-center shadow-lg shadow-green-500/20 disabled:bg-gray-600 disabled:cursor-not-allowed">
-                                                <LockIcon /> {unlocking ? 'Processing...' : 'Unlock Full Report for ₹9'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </Card>
-                    </main>
-                 </div>
-             </div>
-          );
-      };
+            const handleAuth = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                setError('');
+                try {
+                    if (isLogin) {
+                        await auth.signInWithEmailAndPassword(email, password);
+                        showNotification('Logged in successfully!', 'success');
+                        onClose();
+                    } else {
+                        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                        await db.collection('users').doc(userCredential.user.uid).set({
+                            name,
+                            mobile,
+                            email,
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        showNotification('Account created successfully!', 'success');
+                        onClose();
+                    }
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+            
+            return (
+                <Modal isOpen={isOpen} onClose={onClose}>
+                    <h2 className="text-2xl font-bold text-white text-center mb-2">{isLogin ? 'Welcome Back' : 'Create an Account'}</h2>
+                    <p className="text-gray-400 text-center mb-6">{isLogin ? 'Login to continue.' : 'Sign up to get your free analysis.'}</p>
+                    <form onSubmit={handleAuth} className="space-y-4">
+                        {!isLogin && (<>
+                            <input type="text" placeholder="Full Name" value={name} onChange={e => setName(e.target.value)} required className="w-full p-3 bg-gray-800 rounded-md text-white border border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"/>
+                            <input type="tel" placeholder="Mobile Number" value={mobile} onChange={e => setMobile(e.target.value)} required className="w-full p-3 bg-gray-800 rounded-md text-white border border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"/>
+                        </>)}
+                        <input type="email" placeholder="Email Address" value={email} onChange={e => setEmail(e.target.value)} required className="w-full p-3 bg-gray-800 rounded-md text-white border border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"/>
+                        <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full p-3 bg-gray-800 rounded-md text-white border border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"/>
+                        {error && <p className="text-red-500 text-sm">{error}</p>}
+                        <button type="submit" disabled={loading} className="w-full py-3 font-semibold text-black bg-[#00C853] rounded-lg hover:bg-green-400 disabled:bg-gray-600">
+                            {loading ? 'Processing...' : (isLogin ? 'Login' : 'Sign Up')}
+                        </button>
+                    </form>
+                    <p className="text-center text-sm text-gray-500 mt-4">
+                        {isLogin ? "Don't have an account?" : "Already have an account?"}
+                        <button onClick={() => { setIsLogin(!isLogin); setError(''); }} className="font-semibold text-green-400 hover:underline ml-1">
+                            {isLogin ? 'Sign Up' : 'Login'}
+                        </button>
+                    </p>
+                </Modal>
+            );
+        };
 
-      // --- Main App Component ---
-      const CustomCursor = () => {
-          const cursorRef = React.useRef(null);
-          React.useEffect(() => {
-              const moveCursor = (e) => {
-                  if (cursorRef.current) {
-                      cursorRef.current.style.left = `${e.clientX}px`;
-                      cursorRef.current.style.top = `${e.clientY}px`;
-                  }
-              };
-              window.addEventListener('mousemove', moveCursor);
-              return () => window.removeEventListener('mousemove', moveCursor);
-          }, []);
-          return <div ref={cursorRef} className="custom-cursor hidden md:block"></div>
-      }
+        // --- PAGE ---
+        const AnalyzerPage = ({ user, setUser, showNotification }) => {
+            const [jobId, setJobId] = React.useState(null);
+            const [jobData, setJobData] = React.useState(null);
+            const [file, setFile] = React.useState(null);
+            const [isAuthModalOpen, setIsAuthModalOpen] = React.useState(false);
+            const [loadingMessage, setLoadingMessage] = React.useState('');
+            const [activeView, setActiveView] = React.useState({ type: null, id: null });
 
-      function App() {
-          const [notifications, setNotifications] = React.useState([]);
-          const [firebaseApp, setFirebaseApp] = React.useState(null);
-          const [firebaseServices, setFirebaseServices] = React.useState({ auth: null, db: null, storage: null });
-          const [user, setUser] = React.useState(null);
-          const [loadingAuth, setLoadingAuth] = React.useState(true);
-          
-          const showNotification = (message, type = 'success') => {
-              const id = Date.now();
-              setNotifications(prev => [...prev, { id, message, type }]);
-              setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 3000);
-          };
+            React.useEffect(() => {
+                const unsubscribe = auth.onAuthStateChanged(currentUser => {
+                    setUser(currentUser);
+                });
+                return () => unsubscribe();
+            }, []);
+            
+            // Firestore listener for job updates
+            React.useEffect(() => {
+                if (!jobId) return;
+                const unsubscribe = db.collection('jobs').doc(jobId).onSnapshot(doc => {
+                    if (doc.exists) {
+                        const data = doc.data();
+                        setJobData(data);
+                        // If we have a report, select the first item to display
+                        if (data.preview && !activeView.id) {
+                           setActiveView({ type: 'top_fixes', id: data.preview.topFixes?.[0]?.id });
+                        }
+                    } else {
+                        showNotification('Job data could not be found.', 'error');
+                        setJobId(null);
+                    }
+                }, err => {
+                    console.error("Firestore listener error:", err);
+                    showNotification('Error listening to job updates.', 'error');
+                });
+                return () => unsubscribe();
+            }, [jobId]);
 
-          React.useEffect(() => {
-              // Dynamically import and initialize Firebase
-              const initFirebase = async () => {
-                  try {
-                    const { initializeApp } = await import('https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js');
-                    const { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js');
-                    const { getFirestore, doc, setDoc, onSnapshot } = await import('https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js');
-                    const { getStorage, ref, uploadBytesResumable, getDownloadURL } = await import('https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js');
+            const getScoreColor = (score) => {
+                if (!score && score !== 0) return '#6b7280'; // gray
+                if (score < 50) return '#ef4444'; // red
+                if (score < 80) return '#facc15'; // yellow
+                return '#4ade80'; // green
+            };
+            
+            const handleFileChange = (e) => {
+                const selectedFile = e.target.files[0];
+                if (!selectedFile) return;
+
+                // Client-side validation
+                const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+                if (!allowedTypes.includes(selectedFile.type)) {
+                    showNotification('Invalid file type. Please upload a PDF or DOCX file.', 'error');
+                    return;
+                }
+                if (selectedFile.size > 5 * 1024 * 1024) { // 5MB
+                    showNotification('File is too large. Maximum size is 5MB.', 'error');
+                    return;
+                }
+                setFile(selectedFile);
+            };
+
+            const handleAnalyze = async () => {
+                if (!file) {
+                    showNotification('Please upload a resume.', 'error');
+                    return;
+                }
+                if (!user) {
+                    setIsAuthModalOpen(true);
+                    return;
+                }
+                setLoadingMessage('Uploading your resume...');
+
+                try {
+                    // 1. Upload to Firebase Storage
+                    const filePath = `resumes/${user.uid}/${Date.now()}_${file.name}`;
+                    const storageRef = storage.ref(filePath);
+                    const uploadTask = await storageRef.put(file);
+                    const fileUrl = await uploadTask.ref.getDownloadURL();
                     
-                    const app = initializeApp(window.firebaseConfig);
-                    const authInstance = getAuth(app);
-                    const dbInstance = getFirestore(app);
-                    const storageInstance = getStorage(app);
+                    setLoadingMessage('Creating analysis job...');
 
-                    setFirebaseServices({
-                        auth: { instance: authInstance, firebase: { onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword } },
-                        db: { instance: dbInstance, firebase: { doc, setDoc, onSnapshot } },
-                        storage: { instance: storageInstance, firebase: { ref, uploadBytesResumable, getDownloadURL } }
+                    // 2. Call Netlify function to create job
+                    const idToken = await user.getIdToken();
+                    const response = await fetch('/.netlify/functions/createJob', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${idToken}`
+                        },
+                        body: JSON.stringify({ fileUrl, filename: file.name }),
                     });
+
+                    if (!response.ok) throw new Error('Failed to create analysis job.');
                     
-                    // Auth state listener
-                    onAuthStateChanged(authInstance, (currentUser) => {
-                        setUser(currentUser);
-                        setLoadingAuth(false);
+                    const { jobId: newJobId } = await response.json();
+                    setJobId(newJobId); // This will trigger the Firestore listener
+                    showNotification('Analysis started! You will see results here shortly.', 'success');
+
+                } catch (error) {
+                    console.error("Analysis failed:", error);
+                    showNotification(`Analysis failed: ${error.message}`, 'error');
+                } finally {
+                    setLoadingMessage('');
+                }
+            };
+            
+            const handleUnlock = async () => {
+                if (!user || !jobId) return;
+                setLoadingMessage('Creating secure payment order...');
+                try {
+                    const idToken = await user.getIdToken();
+                    const response = await fetch('/.netlify/functions/createRazorpayOrder', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${idToken}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ jobId })
                     });
-                  } catch (error) {
-                    console.error("Firebase initialization failed:", error);
-                    showNotification("Could not connect to services.", "error");
-                    setLoadingAuth(false);
-                  }
-              };
-              initFirebase();
-          }, []);
+                    if (!response.ok) throw new Error('Could not create payment order.');
+                    const { order, key } = await response.json();
 
-          if (loadingAuth) {
-              return <div className="bg-black text-white h-screen flex items-center justify-center">Loading...</div>
-          }
+                    const options = {
+                        key,
+                        amount: order.amount,
+                        currency: order.currency,
+                        name: "Xperto Full Report",
+                        description: `Unlock detailed analysis for ${jobData.filename}`,
+                        order_id: order.id,
+                        handler: function (response){
+                            showNotification('Payment successful! Your report is being unlocked.', 'success');
+                            // The webhook will unlock the report. The UI will update via the Firestore listener.
+                        },
+                        prefill: { name: user.displayName || '', email: user.email, contact: '' },
+                        theme: { color: "#00C853" }
+                    };
+                    const rzp = new window.Razorpay(options);
+                    rzp.open();
+                } catch (err) {
+                    showNotification(`Payment failed: ${err.message}`, 'error');
+                } finally {
+                    setLoadingMessage('');
+                }
+            };
 
-          return (
-              <div className="bg-black font-sans text-gray-300">
-                  <CustomCursor />
-                  <Header user={user} auth={firebaseServices.auth?.instance} />
-                  <main>
-                    <AnalyzerPage 
-                        user={user}
-                        auth={firebaseServices.auth}
-                        db={firebaseServices.db}
-                        storage={firebaseServices.storage}
-                        showNotification={showNotification}
-                    />
-                  </main>
-                  <Footer />
-                  <NotificationCenter notifications={notifications} />
-              </div>
-          );
-      }
+            const resetState = () => {
+                setJobId(null); setJobData(null); setFile(null);
+                setLoadingMessage(''); setActiveView({ type: null, id: null });
+            };
 
-      const container = document.getElementById('root');
-      const root = ReactDOM.createRoot(container);
-      root.render(<App />);
+            const ScoreDonut = ({ score }) => ( <div className="relative w-32 h-32 sm:w-40 sm:h-40"><svg className="w-full h-full" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="transparent" stroke="#374151" strokeWidth="10" /><circle cx="50" cy="50" r="45" fill="transparent" stroke={getScoreColor(score)} strokeWidth="10" strokeDasharray={2 * Math.PI * 45} strokeDashoffset={(2 * Math.PI * 45) - (score / 100) * (2 * Math.PI * 45)} strokeLinecap="round" transform="rotate(-90 50 50)" style={{ transition: 'stroke-dashoffset 0.5s ease-in-out' }} /></svg><div className="absolute inset-0 flex items-center justify-center"><span className="text-3xl sm:text-4xl font-bold" style={{ color: getScoreColor(score) }}>{score || '?'}</span></div></div> );
+            
+            const LockedContent = ({ onUnlock, isLoading }) => (
+                <div className="mt-8 relative"><div className="blur-sm pointer-events-none opacity-60"><h3 className="text-lg font-semibold text-gray-200">Detailed Improvements</h3><p className="mt-2 text-sm text-gray-400 bg-gray-800/50 p-3 rounded-md">Unlock to see detailed, AI-powered suggestions and examples.</p></div><div className="absolute inset-0 bg-gray-900/80 flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-700 p-4 text-center"><button onClick={onUnlock} disabled={isLoading} className="px-6 py-3 font-semibold text-black bg-[#00C853] rounded-lg hover:bg-green-400 transition-colors flex items-center shadow-lg shadow-green-500/20 disabled:bg-gray-600 disabled:cursor-not-allowed"><LockIcon /> {isLoading ? 'Processing...' : 'Unlock Full Report for ₹9'}</button></div></div>
+            );
+
+            const MainContentPane = () => {
+                if (!jobData?.preview || !activeView.id) return <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 sm:p-8 text-center hidden lg:block"><p className="text-gray-400">Select an item on the left to see details.</p></div>;
+
+                const { preview, fullReport, unlocked } = jobData;
+
+                if (activeView.type === 'top_fixes') {
+                    const topFix = preview.topFixes.find(f => f.id === activeView.id);
+                    if (!topFix) return null;
+                    return (
+                        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 sm:p-8"><h2 className="text-xl md:text-2xl font-bold text-white mb-1">Top Fix: <span className="text-[#00C853]">{topFix.title}</span></h2><p className="text-gray-400 mb-6">{topFix.problem}</p><div className="border-t border-gray-700 pt-6 space-y-6"><div><h3 className="text-lg md:text-xl font-bold text-green-400">The Solution</h3><p className="mt-2 text-gray-300">{topFix.solution.explanation}</p></div><div className="p-4 border border-gray-700 rounded-lg"><p className="text-sm font-semibold text-red-400">Before:</p><p className="text-sm text-gray-400 italic pl-4 border-l-2 border-red-500/50 ml-2 py-1">"{topFix.solution.before}"</p><p className="text-sm font-semibold text-green-400 mt-3">After (Suggestion):</p><p className="text-sm text-gray-200 pl-4 border-l-2 border-green-500/50 ml-2 py-1 whitespace-pre-wrap">{topFix.solution.after}</p></div></div></div>
+                    );
+                }
+
+                if (activeView.type === 'section') {
+                    const sectionPreview = preview.sections.find(s => s.id === activeView.id);
+                    const sectionFull = unlocked && fullReport ? fullReport.sections.find(s => s.id === activeView.id) : null;
+                    if (!sectionPreview) return null;
+
+                    return (
+                        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 sm:p-8">
+                            <div className="p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between bg-gray-800 gap-4"><h2 className="flex-grow text-xl md:text-2xl font-bold text-white text-center sm:text-left">{sectionPreview.title}</h2><div className="flex items-center justify-center rounded-full bg-gray-900 font-bold w-14 h-14 text-2xl border-2 flex-shrink-0" style={{borderColor: getScoreColor(sectionPreview.score), color: getScoreColor(sectionPreview.score)}}>{sectionPreview.score}</div></div>
+                            <div className="mt-6 border-b border-gray-700 pb-6"><h3 className="text-lg font-semibold text-white">Free Findings</h3><ul className="mt-3 space-y-2">{(sectionPreview.freeFindings || []).map((f, i) => <li key={i} className="flex items-start text-gray-300"><CheckIcon /><span>{f}</span></li>)}</ul></div>
+                            <div className="mt-6"><h3 className="text-lg font-semibold text-white">Free Quick Fixes</h3><ul className="mt-3 space-y-2">{(sectionPreview.quickTips || []).map((t, i) => <li key={i} className="flex items-start text-gray-300"><CheckIcon /><span>{t}</span></li>)}</ul></div>
+                            
+                            {unlocked && sectionFull ? (
+                                <div className="mt-8 space-y-8 animate-fade-in">
+                                    <div><h3 className="text-lg md:text-xl font-bold text-green-400">Detailed Improvements</h3><ul className="mt-3 list-disc list-inside text-gray-300 space-y-2">{sectionFull.lockedContent.detailedTips.map((tip, i) => <li key={i}>{tip}</li>)}</ul></div>
+                                    <div><h3 className="text-lg md:text-xl font-bold text-green-400">Rewritten Examples</h3><div className="mt-3 space-y-4">{(sectionFull.lockedContent.examples || []).map((ex, i) => ( <div key={i} className="p-4 border border-gray-700 rounded-lg"><p className="text-sm font-semibold text-red-400">Before:</p><p className="text-sm text-gray-400 italic pl-4 border-l-2 border-red-500/50 ml-2 py-1">"{ex.before}"</p><p className="text-sm font-semibold text-green-400 mt-3">After:</p><p className="text-sm text-gray-200 pl-4 border-l-2 border-green-500/50 ml-2 py-1 whitespace-pre-wrap">{ex.after}</p></div> ))}</div></div>
+                                    <div><h3 className="text-lg md:text-xl font-bold text-green-400">Why It Matters</h3><p className="mt-2 text-gray-300">{sectionFull.lockedContent.explanation}</p></div>
+                                </div>
+                            ) : ( <LockedContent onUnlock={handleUnlock} isLoading={!!loadingMessage} /> )}
+                        </div>
+                    );
+                }
+                return null;
+            };
+
+            const AnalyzerInput = () => (
+                <><div className="max-w-3xl mx-auto text-center"><h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white">AI Profile Analyzer</h1><p className="mt-4 text-gray-400">Get an instant analysis of your Resume or LinkedIn profile to identify weaknesses and outshine the competition.</p></div><div className="max-w-2xl mx-auto mt-12"><Card className="p-6 sm:p-8"><div className="flex justify-center"><label htmlFor="file-upload" className="cursor-pointer text-center p-8 border-2 border-dashed border-gray-600 rounded-xl hover:border-green-500 hover:bg-gray-800/50 transition-colors w-full"><svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg><p className="mt-2 font-semibold text-white">Click to Upload your Resume</p><p className="text-xs text-gray-500">PDF or DOCX, up to 5MB</p></label><input id="file-upload" type="file" accept=".pdf,.docx" onChange={handleFileChange} className="hidden"/></div>{file && <p className="mt-4 text-sm text-center text-gray-400">Selected: <span className="font-semibold text-gray-200">{file.name}</span></p>}<button onClick={handleAnalyze} disabled={!!loadingMessage || !file} className="mt-6 w-full py-3 font-semibold text-black bg-[#00C853] rounded-lg hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed transition-transform duration-200 disabled:transform-none hover:scale-105">{loadingMessage || 'Grade My Resume'}</button></Card></div></>
+            );
+
+            const ProcessingView = () => (
+                <div className="text-center p-8 animate-fade-in">
+                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500 mb-4"></div>
+                    <h2 className="text-2xl font-bold text-white">Analysis in Progress</h2>
+                    <p className="text-gray-400 mt-2">Hang tight! Our AI is meticulously reviewing your document.</p>
+                    <p className="text-gray-400 mt-1">Status: <span className="font-semibold text-green-400">{jobData?.status || 'initializing'}</span></p>
+                </div>
+            );
+
+            return (
+                <div className="container mx-auto px-4 sm:px-6 py-12 md:py-16 animate-fade-in min-h-screen">
+                    <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} showNotification={showNotification} />
+
+                    {!jobData ? ( <AnalyzerInput /> ) : (
+                        jobData.status === 'pending' || jobData.status === 'processing' ? <ProcessingView /> : (
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-8 animate-slide-in-up">
+                                <aside className="lg:col-span-4 xl:col-span-3">
+                                    <div className="p-4 rounded-xl bg-gray-900 border border-gray-800 lg:sticky lg:top-24">
+                                        <div className="flex flex-col items-center">
+                                            <ScoreDonut score={jobData.preview?.overallScore} />
+                                            <p className="mt-3 text-center text-sm text-gray-400">{jobData.preview?.overallSummary}</p>
+                                        </div>
+                                        <h3 className="font-semibold text-gray-200 mt-6 mb-3 text-[#00C853]">Top 5 Actionable Fixes (Free)</h3>
+                                        <div className="space-y-2">
+                                            {(jobData.preview?.topFixes || []).map(fix => (
+                                                <div key={fix.id}><button onClick={() => setActiveView({ type: 'top_fixes', id: fix.id })} className={`w-full text-left p-3 flex items-center border-2 transition-colors rounded-lg ${activeView.id === fix.id ? `border-green-500 lg:bg-gray-800` : 'border-transparent'} hover:bg-gray-800/50`}><div className="w-6 h-6 flex items-center justify-center rounded-md font-bold text-lg text-white flex-shrink-0 bg-green-600 mr-3"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg></div><p className="font-semibold text-gray-100 flex-grow truncate">{fix.title}</p></button></div>
+                                            ))}
+                                        </div>
+                                        <div className="border-t border-gray-700 my-4"></div>
+                                        <h3 className="font-semibold text-gray-200 mb-3">Detailed Report</h3>
+                                        <div className="space-y-2">
+                                            {(jobData.preview?.sections || []).map(section => (
+                                                <div key={section.id}><button onClick={() => setActiveView({ type: 'section', id: section.id })} className={`w-full text-left p-3 flex items-center border-2 transition-colors rounded-lg ${activeView.id === section.id ? `border-green-500 lg:bg-gray-800` : 'border-transparent'} hover:bg-gray-800/50`}><p className="font-semibold text-gray-100 flex-grow">{section.title}</p><div className={`font-bold text-lg mr-3`} style={{color: getScoreColor(section.score)}}>{section.score}</div></button></div>
+                                            ))}
+                                        </div>
+                                        <button onClick={resetState} className="w-full mt-4 py-2 text-sm font-semibold text-gray-300 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors">Analyze Another</button>
+                                    </div>
+                                </aside>
+                                <main className="lg:col-span-8 xl:col-span-9"><MainContentPane /></main>
+                            </div>
+                        )
+                    )}
+                </div>
+            );
+        };
+        
+        const App = () => {
+            const [user, setUser] = React.useState(null);
+            const [notifications, setNotifications] = React.useState([]);
+            
+            const showNotification = (message, type = 'success') => {
+                const id = Date.now();
+                setNotifications(prev => [...prev, { id, message, type }]);
+                setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 4000);
+            };
+
+            const handleLogout = () => { auth.signOut().then(() => showNotification('Logged out successfully.')); };
+
+            const cursorRef = React.useRef(null);
+            React.useEffect(() => {
+                const moveCursor = (e) => {
+                    if (cursorRef.current) {
+                        cursorRef.current.style.left = `${e.clientX}px`;
+                        cursorRef.current.style.top = `${e.clientY}px`;
+                    }
+                };
+                window.addEventListener('mousemove', moveCursor);
+                return () => window.removeEventListener('mousemove', moveCursor);
+            }, []);
+
+            return (
+                <div className="bg-black font-sans text-gray-300">
+                    <div ref={cursorRef} className="custom-cursor hidden md:block"></div>
+                    <Header user={user} onLogout={handleLogout} />
+                    <main><AnalyzerPage user={user} setUser={setUser} showNotification={showNotification} /></main>
+                    <Footer />
+                    <NotificationCenter notifications={notifications} />
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
     </script>
 </body>
 </html>
-
